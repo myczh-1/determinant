@@ -102,7 +102,7 @@ The goal is:
 ```text
 same AAL
 + same AAL language version and dialect
-+ same Binding, including an explicit or generated fallback
++ same Binding
 + same compiler version
 + same runtime and dependencies
 = same program semantics
@@ -130,7 +130,11 @@ Stable ID: field_order_number
 Program field: id
 ```
 
-Binding is optional. Without a Binding file, the compiler creates a deterministic fallback for that build. Use an explicit Binding when IDs or program-facing names must remain stable across source renames or declaration reordering.
+Binding is optional for experiments.
+
+When no explicit Binding is provided, Determinant can generate a deterministic temporary Binding for the current build.
+
+For maintained applications, use an explicit Binding whenever stable identities or program-facing names must survive source renames or declaration reordering.
 
 Binding is not everyday business logic. Business behavior is reviewed primarily in AAL; a Binding is reviewed separately when it is created or changed.
 
