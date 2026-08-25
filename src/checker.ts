@@ -14,6 +14,7 @@ import {
   type TypeRef,
 } from "./ast.js";
 import { error, type Diagnostic } from "./diagnostics.js";
+import { DEFAULT_LANGUAGE, localizeDiagnostics, type AALLanguage } from "./language.js";
 
 export type Environment = Map<string, TypeRef>;
 
@@ -22,12 +23,12 @@ export interface ProgramTypeInfo {
   readonly flowSignatures: ReadonlyMap<string, FlowSignature>;
 }
 
-export function checkAAL(program: Program): Diagnostic[] {
+export function checkAAL(program: Program, language: AALLanguage = DEFAULT_LANGUAGE): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
   const typeInfo = createProgramTypeInfo(program);
   checkDeclarations(program.objects, typeInfo, diagnostics);
   checkFlows(program, typeInfo, diagnostics);
-  return diagnostics;
+  return localizeDiagnostics(diagnostics, language);
 }
 
 export function createProgramTypeInfo(program: Program): ProgramTypeInfo {

@@ -9,7 +9,11 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "npm run build && node --test test/*.mjs",
-    "compile:example": "npm run build && node bin/determinant.mjs examples/order.aal --binding bindings/order.binding.json --out generated/order.ts"
+    "test": "npm run test:en",
+    "test:en": "npm run build && node --test test/compiler.test.mjs",
+    "test:zh": "npm run build && node --test test/compiler.zh-CN.test.mjs",
+    "test:all": "npm run build && node --test test/*.test.mjs",
+    "compile:example": "npm run build && node bin/determinant.mjs examples/order.aal --binding bindings/order.binding.json --out generated/order.ts",
+    "compile:example:zh": "npm run build && node bin/determinant.mjs examples/order.zh-CN.aal --language zh-CN --binding bindings/order.binding.zh-CN.json --out generated/order.zh-CN.ts"
   }
 }

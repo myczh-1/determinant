@@ -1,254 +1,164 @@
-# AAL 编写指南
+# AAL Authoring Guide
 
-## 语言定位
+> Chinese version: [AAL 编写指南](./aal-authoring-guide.zh-CN.md)
 
-AAL（Auditable Application Language，可审计应用语言）是给人审计、给机器确定性执行的应用语言。
+## What AAL is
 
-它描述的是：
+AAL (Auditable Application Language) is a formal application language intended for human review and deterministic execution.
 
-- 世界中有哪些数据；
-- 数据有哪些状态；
-- 一个流程会计算什么；
-- 一个流程会改变什么；
-- 多个流程如何组合；
-- 成功结果和失败条件是什么。
+AAL describes:
 
-AAL 不要求用户阅读程序如何组织。确认后的 AAL 会经过确定性解析、语义检查和 TypeScript/Node.js 生成；这个阶段不再依赖 AI 猜测。
+- data and state in the business world;
+- calculations and conditions;
+- explicit state changes;
+- composition of business flows;
+- successful outputs and explicit failures.
 
-## 给生成 AAL 的 AI 的规则
+The confirmed AAL source is processed by a deterministic parser, semantic checker, and TypeScript/Node.js backend. The compiler does not ask an AI to infer missing business decisions.
 
-1. 只输出 AAL，不要输出 TypeScript、JavaScript 或伪代码。
-2. 用户层只使用 `对象` 和 `流程` 两种一级结构。不要生成 `方法`、`行为`、`调用`、`自身`、`this`、`对象.字段` 或其他程序组织语法。
-3. 不要把字段访问写成点号。字段关系统一写成 `订单 的 编号`，多层关系写成 `订单 的 用户 的 姓名`。
-4. 不要自行补全币种、单位、精度、字段、权限、重试、并发、回滚、舍入或错误处理。
-5. 每个对象字段和流程输入都必须有明确类型。流程输出的名称必须明确，输出表达式必须来自已知输入、计算结果或对象状态。
-6. 真实状态变化必须写在 `改变：` 下。只计算一个新值不能代替状态变化。
-7. 流程组合必须显式写出 `执行`、`使用` 和 `得到`，不能假设参数顺序、返回值或失败行为。
-8. 需求存在歧义时先提问；不要用默认值掩盖缺失的业务决定。
-9. AAL 被用户确认后，停止继续改写业务语义；后续交给确定性解析器、检查器和编译器。
+## Rules for AI-generated AAL
 
-## 文件结构
+1. Output AAL only. Do not output TypeScript, JavaScript, or pseudocode as AAL.
+2. The user-facing language has only two top-level structures: `object` and `flow`.
+3. Use possessive relationships for fields, for example `inventory's quantity`. Do not use dot access, brackets, `this`, or other implementation syntax.
+4. Do not invent currencies, units, precision, fields, permissions, retries, concurrency, rollback, rounding, or error behavior.
+5. Declare a type for every object field and flow input.
+6. Use `change` for real state changes. A calculation alone does not mutate an object.
+7. Compose flows explicitly with `execute`, `use`, and `get`.
+8. Ask the user when a requirement is ambiguous.
+9. After the user confirms AAL, stop changing its business meaning. Deterministic tooling owns parsing, checking, and compilation.
 
-文件必须从应用名称开始，顶层只能放对象和流程：
+## File structure
 
-```aal
-应用：订单库存
-
-对象：库存
-
-    数量：整数
-
-流程：检查库存
-
-    输入：
-        库存：库存
-        数量：整数
-
-    输出：
-        剩余库存 = 库存 的 数量
-```
-
-使用 4 个空格表示一层缩进。空行和以 `#` 开头的行不参与语义。
-
-## 对象
-
-对象只描述数据和状态，不包含流程。字段直接写在对象下面：
+An AAL file starts with an application name. Top-level declarations are objects and flows:
 
 ```aal
-对象：订单
+application: OrderInventory
 
-    编号：整数
+object: Inventory
 
-对象：库存
+    quantity: integer
 
-    数量：整数
+flow: CheckInventory
+
+    input:
+        inventory: Inventory
+        quantity: integer
+
+    output:
+        remainingInventory = inventory's quantity
 ```
 
-对象字段通过 `的` 连接：
+Use four spaces for each indentation level. Blank lines and lines beginning with `#` are ignored.
+
+## Objects and fields
+
+Objects describe data and state. Fields are written directly under an object:
 
 ```aal
-库存 的 数量
-订单 的 用户 的 姓名
+object: Order
+
+    number: integer
 ```
 
-用户层不使用点号、方括号或其他程序字段访问形式。
-
-## 类型
-
-P0 支持：
+Field relationships use the possessive form:
 
 ```text
-整数
-文本
-布尔
-人民币金额
-美元金额
-对象名称
+order's number
+order's customer's name
 ```
 
-也可以明确金额单位：
+## Types
 
-```aal
-单价：人民币金额，单位为元
-汇率：美元金额，单位为美元
-```
-
-金额的币种、单位和精度属于业务语义。不能只写“金额”，也不能让编译器猜测“人民币”或“元”。常用金额类型的精度由标准定义；需要不同精度时必须在语言标准支持后显式声明。
-
-## 流程
-
-流程表达业务步骤。输入、计算、改变、执行和输出都必须明确：
-
-```aal
-流程：扣减库存
-
-    输入：
-        库存：库存
-        数量：整数
-
-    如果 数量 <= 0：
-        失败：数量必须大于零
-
-    如果 库存 的 数量 < 数量：
-        失败：库存不足
-
-    改变：
-        库存 的 数量 = 库存 的 数量 - 数量
-
-    输出：
-        剩余库存 = 库存 的 数量
-```
-
-`如果` 的条件必须是布尔条件。`失败` 是明确的流程失败结果，不是异常消息猜测。
-
-`改变` 才表示真实状态被修改。例如上面的流程会修改传入的库存对象；如果只写 `计算`，则只会得到新值，不会改变对象状态。
-
-## 计算与流程组合
-
-计算结果需要命名：
-
-```aal
-计算：
-    总价 = 单价 * 数量
-```
-
-流程组合必须把输入和结果写出来：
-
-```aal
-执行：
-    计算订单总价
-
-    使用：
-        单价
-        数量
-
-    得到：
-        总价
-```
-
-`使用` 中的内容按声明顺序对应被执行流程的输入；`得到` 中的名称按输出顺序接收结果。被执行流程失败时，当前流程也会得到同一个失败结果。
-
-## 运算
-
-P0 支持整数算术、金额与整数相乘，以及同类型值的比较。金额之间的加减和比较要求币种、单位、精度全部一致。
-
-支持的符号为：
+P0 supports:
 
 ```text
-+  -  *  /  %  =  >  <  >=  <=  !=  (  )
+integer
+text
+boolean
+CNY amount
+USD amount
+object name
 ```
 
-字段关系仍然只使用 `的`。不能使用点号、箭头、方括号或花括号表达业务语义。
-
-## 完整示例
+An amount can specify its unit:
 
 ```aal
-应用：订单库存
-
-对象：订单
-
-    编号：整数
-
-对象：库存
-
-    数量：整数
-
-流程：计算订单总价
-
-    输入：
-        单价：人民币金额
-        数量：整数
-
-    如果 数量 <= 0：
-        失败：数量必须大于零
-
-    计算：
-        总价 = 单价 * 数量
-
-    输出：
-        总价
-
-流程：扣减库存
-
-    输入：
-        库存：库存
-        数量：整数
-
-    如果 数量 <= 0：
-        失败：数量必须大于零
-
-    如果 库存 的 数量 < 数量：
-        失败：库存不足
-
-    改变：
-        库存 的 数量 = 库存 的 数量 - 数量
-
-    输出：
-        剩余库存 = 库存 的 数量
-
-流程：创建订单
-
-    输入：
-        订单：订单
-        库存：库存
-        单价：人民币金额
-        数量：整数
-
-    执行：
-        计算订单总价
-
-        使用：
-            单价
-            数量
-
-        得到：
-            总价
-
-    执行：
-        扣减库存
-
-        使用：
-            库存
-            数量
-
-        得到：
-            剩余库存
-
-    输出：
-        订单编号 = 订单 的 编号
-        总价
-        剩余库存
+unitPrice: CNY amount, unit yuan
 ```
 
-当前 P0 将最后声明的流程作为生成程序的 `run` 入口。后续如果需要多个外部入口，会把入口声明作为独立语言能力加入，而不是依靠名称猜测。
+Currency, unit, and precision are business semantics. Do not write a generic `amount` and expect the compiler to guess its meaning.
 
-## 编译前检查清单
+## Flows
 
-- [ ] 顶层是否只有对象和流程？
-- [ ] 每个对象字段和流程输入是否声明了类型？
-- [ ] 每个金额是否明确币种和单位？
-- [ ] 每个字段关系是否使用“的”，而不是点号？
-- [ ] 所有状态变化是否显式写在“改变”中？
-- [ ] 所有流程组合是否写明“执行 / 使用 / 得到”？
-- [ ] 所有失败条件是否明确写出条件和消息？
-- [ ] 是否存在 AI 或编译器自行补全的业务决定？
+Flows describe business steps:
+
+```aal
+flow: DeductInventory
+
+    input:
+        inventory: Inventory
+        quantity: integer
+
+    if quantity <= 0:
+        failure: Quantity must be greater than zero
+
+    if inventory's quantity < quantity:
+        failure: Insufficient inventory
+
+    change:
+        inventory's quantity = inventory's quantity - quantity
+
+    output:
+        remainingInventory = inventory's quantity
+```
+
+`if` must produce a Boolean condition. `failure` is an explicit flow failure. `change` is the only P0 form that represents a real object state mutation.
+
+## Calculations and flow composition
+
+Name calculation results:
+
+```aal
+calculate:
+    total = unitPrice * quantity
+```
+
+Compose another flow explicitly:
+
+```aal
+execute:
+    CalculateOrderTotal
+
+    use:
+        unitPrice
+        quantity
+
+    get:
+        total
+```
+
+`use` follows the declared input order. `get` follows the declared output order. A failed executed flow propagates the same failure to the containing flow.
+
+## Binding
+
+The AAL surface uses audit names. An optional [Binding file](./binding-guide.md) maps those names to stable IDs and program-facing names such as `Inventory → InventoryRecord` and `number → id`.
+
+Without a Binding file, the compiler creates a deterministic fallback for that build. An explicit Binding is still valuable in English when audit names, stable identities, and program-facing names differ, and is required when IDs must survive source renames or reordering. Binding is a separate build input and must not add hidden business rules.
+
+## Complete example
+
+The repository example is [examples/order.aal](../../examples/order.aal). It contains two objects and three flows: total calculation, inventory deduction, and order creation.
+
+The current P0 compiler treats the last declared flow as the generated `run` entry. An explicit multi-entry protocol layer is intentionally left for a later design.
+
+## Review checklist
+
+- [ ] Are all top-level declarations objects or flows?
+- [ ] Does every object field and flow input have a type?
+- [ ] Are currency and unit explicit for every amount?
+- [ ] Does every field relationship use the possessive form (`inventory's quantity`)?
+- [ ] Are all real state changes explicit under `change`?
+- [ ] Are all flow compositions explicit under `execute / use / get`?
+- [ ] Are all failure conditions and messages explicit?
+- [ ] Did the AI avoid inventing business decisions?

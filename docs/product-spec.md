@@ -1,134 +1,98 @@
 # Product Specification
 
-## Product Overview
+## Product overview
 
-Determinant 是 AAL 的确定性编译系统。AAL 是面向应用业务语义的正式源语言，目标是让人类和 AI 审计数据、状态、流程和业务决定，同时把程序组织细节下沉给编译器。
+Determinant is the deterministic compiler for AAL. AAL is a formal source language for application behavior, intended to let humans and AI review data, state, flows, and business decisions while implementation organization remains below the compiler boundary.
 
-AAL 的表层只保留两种一级结构：
+The audit surface has two top-level structures:
 
-- `对象`：描述世界中的数据和状态；
-- `流程`：描述计算、状态改变、流程组合、失败和输出。
+- `object`: data and state in the business world;
+- `flow`: calculation, state change, composition, failure, and output.
 
-Binding 是独立的名称和结构绑定层。它不改变 AAL 的业务语义，只把审计名称绑定到程序名称；绑定文件的变化也属于构建输入。
+Binding is an optional, separate layer for names and structure. It maps audit names to stable IDs and program-facing names without changing business semantics. If omitted, the compiler creates a deterministic fallback for that build; durable identity across source renames or reordering requires an explicit Binding. If supplied, Binding is part of the reviewed build input.
 
-## Deterministic Boundary
+## Deterministic boundary
 
 ```text
-自然语言 → AI → AAL → 确定性解析 / AST / 语义检查 / 编译 → TypeScript / Node.js
+Natural language → AI → AAL → parser / AST / semantic checks / compiler → TypeScript / Node.js
 ```
 
-AI 负责把自然语言整理成待确认的 AAL。用户确认 AAL 后，AI 退出业务语义链路；相同 AAL、编译器版本和目标配置必须产生相同结果。
+AI may prepare AAL for confirmation. After confirmation, AI leaves the semantic execution path. The same AAL, Binding, compiler version, dialect, and target configuration must produce the same result.
 
-## Target User
+## Target user
 
-主要用户是能够描述业务规则、但希望把审计重点放在业务行为而不是实现代码上的应用开发者。
+Application developers who can describe business rules and want review to focus on observable behavior instead of implementation structure.
 
-## Core User Flow
+## Core user flow
 
-1. 用户提供或让 AI 生成 AAL。
-2. 用户阅读 AAL，确认数据、流程、状态变化、输入、输出和失败条件。
-3. 工具解析并报告带位置的语法诊断。
-4. 工具检查名称、字段、类型、流程组合和显式状态变化。
-5. 检查通过后生成 TypeScript/Node.js。
-6. 用户运行成功与失败测试；需要修改业务时修改 AAL。
+1. The user writes AAL or asks AI to prepare it.
+2. The user reviews data, flows, state changes, inputs, outputs, and failures.
+3. The parser reports positioned syntax diagnostics.
+4. The checker validates names, fields, types, composition, and explicit mutation.
+5. The compiler generates TypeScript/Node.js.
+6. Success and failure tests run; business changes are made in AAL.
 
-## P0 Surface Syntax
+## P0 surface syntax
 
 ```aal
-应用：订单库存
+application: OrderInventory
 
-对象：库存
+object: Inventory
 
-    数量：整数
+    quantity: integer
 
-流程：扣减库存
+flow: DeductInventory
 
-    输入：
-        库存：库存
-        数量：整数
+    input:
+        inventory: Inventory
+        quantity: integer
 
-    如果 数量 <= 0：
-        失败：数量必须大于零
+    if quantity <= 0:
+        failure: Quantity must be greater than zero
 
-    如果 库存 的 数量 < 数量：
-        失败：库存不足
+    if inventory's quantity < quantity:
+        failure: Insufficient inventory
 
-    改变：
-        库存 的 数量 = 库存 的 数量 - 数量
+    change:
+        inventory's quantity = inventory's quantity - quantity
 
-    输出：
-        剩余库存 = 库存 的 数量
+    output:
+        remainingInventory = inventory's quantity
 ```
 
-P0 使用 4 个空格缩进。对象字段直接写在对象下；字段关系使用 `的`，不使用点号。`改变` 是唯一表示真实状态修改的 P0 结构。
+P0 uses four-space indentation. Fields are declared directly under objects, possessive relationships replace implementation-style dot access, and `change` is the only P0 structure for real state mutation.
 
-流程可以通过 `执行 / 使用 / 得到` 组合：
+Flows compose with `execute / use / get`. The last declared flow is the generated `run` entry in P0; a future multi-entry protocol must be explicit rather than inferred from names.
 
-```aal
-执行：
-    计算订单总价
+English is the default dialect. Chinese sources select `zh-CN`; both dialects normalize into the same AST and use the same checker and generator.
 
-    使用：
-        单价
-        数量
+## Core features
 
-    得到：
-        总价
-```
+1. Text source files for applications, objects, fields, and flows.
+2. Deterministic parsing and AST construction.
+3. Semantic checks for declarations, fields, types, composition, outputs, and mutation.
+4. Explicit integer, text, Boolean, object, CNY amount, and USD amount types.
+5. Deterministic TypeScript/Node.js generation.
+6. Optional Binding with stable IDs and program names; explicit files require complete coverage.
+7. Reproducible order and inventory acceptance tests in English and Chinese.
 
-当前实现把最后声明的流程作为生成程序的 `run` 入口。这个约定只属于 P0 编译器，不代表 AAL 可以依靠名称猜测业务入口。
+## P0 scope
 
-## Core Features
+Included:
 
-### Feature 1: AAL 文本源文件
+- one application with multiple objects and flows;
+- English and `zh-CN` surface dialects;
+- typed fields and possessive field relationships;
+- arithmetic, comparison, conditions, failures, calculations, and explicit changes;
+- explicit flow composition;
+- optional name Binding;
+- TypeScript generation and execution.
 
-支持应用、对象、对象字段、流程、输入、条件、失败、计算、改变、执行、使用、得到和输出。
+Excluded:
 
-### Feature 2: 确定性解析与 AST
-
-同一份 AAL 源文件重复解析得到等价 AST；解析阶段不执行业务动作。
-
-### Feature 3: 语义检查
-
-检查重复声明、未定义名称、对象字段、流程输入、流程组合的输入输出数量和类型、表达式类型、条件类型、输出完整性，以及 `改变` 是否明确修改对象字段。
-
-### Feature 4: 显式业务类型
-
-P0 支持整数、文本、布尔、对象类型以及常用人民币/美元金额。金额的币种、单位和精度由类型携带；不同币种、单位或精度不能直接进行要求一致的运算。
-
-### Feature 5: TypeScript/Node.js 后端
-
-从检查通过的 AST 确定性生成可执行 TypeScript。生成代码负责运行时金额表示、流程失败传播和对象状态修改。
-
-### Feature 6: Binding 绑定层
-
-Binding 为对象、字段、流程、流程输入和流程输出提供稳定内部身份及程序名称。P0 使用 JSON 绑定文件，要求覆盖 AAL 中的全部声明；缺失或多余绑定会被拒绝。
-
-### Feature 7: 可复现验收
-
-订单库存样例覆盖金额计算、库存不足、数量无效、显式库存修改和重复编译结果。
-
-## MVP Scope
-
-### Included In P0
-
-- 一个应用；
-- 多个对象和多个流程；
-- 对象字段与 `的` 字段关系；
-- 整数、文本、布尔、对象、常用金额类型；
-- 整数/金额基础运算与比较；
-- `如果 / 失败`；
-- `计算` 和显式 `改变`；
-- `执行 / 使用 / 得到` 流程组合；
-- TypeScript/Node.js 生成与执行；
-- 名称绑定与绑定变更检查；
-- 订单库存成功、失败和状态变化测试。
-
-### Excluded From P0
-
-- UI、页面布局和视觉设计；
-- 数据库、ORM、HTTP 和分布式事务；
-- 权限、回滚、自动重试和隐式并发；
-- 图形化编辑器和完整 IDE；
-- 由编译器或 AI 猜测未声明的业务规则；
-- 确认 AAL 后再次由 LLM 参与解析、检查或编译。
+- UI and visual design;
+- databases, ORM, HTTP, and distributed transactions;
+- permissions, rollback, automatic retry, and implicit concurrency;
+- a graphical editor or complete IDE;
+- compiler or AI guesses for undeclared business rules;
+- LLM participation after AAL confirmation.

@@ -1,64 +1,54 @@
 # Project Goal
 
-## One-Sentence Summary
+## One-sentence summary
 
-Determinant 将人类可审计的 AAL 程序确定性编译为可运行应用程序。
+Determinant deterministically compiles human-auditable AAL programs into executable applications.
 
 ## Background
 
-AI 可以把自然语言直接转换成代码，但业务决定容易隐藏在实现细节、默认值和模型推断中。Determinant 在自然语言与传统编程语言之间增加 AAL：用户审计 AAL 中的数据、流程、状态变化和失败条件，编译器负责稳定地生成实现。
+AI can translate natural language directly into code, but business decisions can disappear into implementation details, defaults, and model inference. Determinant places AAL between natural language and a general-purpose language: users audit data, flows, state changes, and failures; the compiler generates the implementation reproducibly.
 
-## Core Value
+## Core value
 
-- 用户审计“应用要做什么”，而不是大量程序组织细节；
-- 未声明的业务决定不能被编译器静默补全；
-- 用户确认 AAL 后，解析、检查、编译和测试不依赖 LLM；
-- 同一份 AAL 在相同工具链下产生可复现结果。
+- Review what the application does, not how code is organized.
+- Never silently complete an undeclared business decision.
+- Keep parsing, checking, compilation, and tests independent of LLMs after confirmation.
+- Reproduce the same output with the same AAL and toolchain inputs.
 
-## First-Version Goal
-
-建立一条最小但真实可运行的链路：
+## First-version goal
 
 ```text
-AAL 源文件
+AAL source
     ↓
-确定性解析为 AST
+deterministic AST
     ↓
-对象、流程和类型检查
+object, flow, and type checks
     ↓
-确定性生成 TypeScript
+deterministic TypeScript
     ↓
-Node.js 执行
+Node.js execution
 ```
 
-端到端验收样例是订单库存：订单和库存作为对象，订单总价和库存扣减作为流程，创建订单作为组合流程；库存扣减必须显式改变库存状态。
+The end-to-end acceptance example creates an order, calculates its total, and deducts inventory. Inventory deduction must explicitly mutate inventory state.
 
-## Language Boundary
+## Language boundary
 
-AAL 用户层只描述对象和流程：
+The user-facing language describes only objects and flows. It exposes explicit fields, inputs, conditions, calculations, changes, execution, results, outputs, and failures. Currency, unit, precision, and failure behavior are business semantics and cannot be inferred.
 
-- `对象` 描述数据和状态；
-- `流程` 描述输入、条件、计算、改变、执行、结果和失败；
-- 字段关系使用 `的`；
-- 流程组合使用 `执行 / 使用 / 得到`；
-- 币种、单位、精度和失败条件必须显式表达。
+English is the default surface dialect and Chinese uses `zh-CN`. Both enter the same AST, checker, and generator. Optional Binding separates audit names from stable IDs and program names in either language.
 
-编译器可以隐藏函数名、变量名、运行时对象和目标语言细节，但不能隐藏业务决定。
+## Non-goals
 
-## Non-Goals
+- Replacing TypeScript, Python, Go, or other general-purpose languages.
+- Supporting UI and visual interaction in P0.
+- Covering databases, HTTP, distributed systems, and all concurrency semantics at once.
+- Letting AI participate in the confirmed deterministic compiler path.
+- Filling in permissions, retries, rollback, rounding, or other decisions by default.
 
-第一版不追求：
+## Success criteria
 
-- 替代 TypeScript、Python 或 Go 等通用语言；
-- 支持 UI 和视觉交互；
-- 一次性覆盖数据库、HTTP、分布式系统和全部并发语义；
-- 让 AI 参与确认后的确定性编译链；
-- 用默认值补全权限、重试、回滚、舍入或其他业务决定。
-
-## Success Criteria
-
-- 多对象、多流程的 AAL 程序可以解析、检查、编译和运行；
-- 相同输入重复编译得到相同代码；
-- 未定义名称、类型冲突、非法字段访问和不明确状态修改会被拒绝；
-- 订单库存样例覆盖成功、库存不足、无效数量和库存状态变化；
-- 用户只阅读 AAL 和诊断信息即可理解样例的主要业务语义。
+- Multi-object and multi-flow AAL parses, checks, compiles, and runs.
+- Repeated compilation produces identical code.
+- Undefined names, type conflicts, illegal field access, and unclear mutations are rejected.
+- English and Chinese examples express equivalent stable identities.
+- The order example covers success, insufficient inventory, invalid quantity, and state mutation.

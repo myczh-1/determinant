@@ -1,116 +1,101 @@
 # Feature List
 
-## Priority Legend
+## Priority legend
 
-- P0：第一版必须完成
-- P1：第一版之后的重要能力
-- P2：更长期或可选能力
+- P0: required for the first working version
+- P1: important after P0
+- P2: longer-term or optional
 
-## P0 Features
+## P0 features
 
-### 1. 最小 AAL 语法
+### 1. Minimal AAL syntax
 
-- User story：作为用户，我希望用稳定、可读的文本描述数据和应用流程。
-- Description：支持对象、对象字段、流程、输入、条件、失败、计算、改变、执行、使用、得到和输出。
-- Acceptance criteria：
-  - [x] 订单库存样例可以用两个对象和三个流程完整表达。
-  - [x] 不符合语法的源文件产生带位置的诊断信息。
-  - [x] 语法不依赖 LLM 的解释或猜测。
+- User story: describe application data and flows in stable, readable text.
+- Description: support applications, objects, fields, flows, inputs, conditions, failures, calculations, changes, execution, arguments, received results, and outputs.
+- Acceptance criteria:
+  - [x] The order and inventory example is fully represented by two objects and three flows.
+  - [x] Invalid syntax produces positioned diagnostics.
+  - [x] Syntax does not depend on LLM interpretation.
+  - [x] The default English dialect and `zh-CN` dialect use the same AST and compiler pipeline.
 
-### 2. AST 与确定性解析
+### 2. AST and deterministic parsing
 
-- User story：作为编译器，我希望同一份 AAL 始终产生同样的结构。
-- Description：将源文件解析为稳定 AST；空白和注释不会改变语义。
-- Acceptance criteria：
-  - [x] 同一输入重复解析得到等价 AST。
-  - [x] AST 能表示 P0 支持的全部语句和表达式。
-  - [x] 解析阶段不执行业务动作。
+- User story: the same AAL always produces the same structure.
+- Acceptance criteria:
+  - [x] Repeated parsing produces equivalent ASTs.
+  - [x] The AST represents all P0 statements and expressions.
+  - [x] Parsing performs no business action.
 
-### 3. 对象、流程与组合
+### 3. Objects, flows, and composition
 
-- User story：作为应用开发者，我希望把业务流程拆成多个可审计流程并组合起来。
-- Description：对象只描述状态；流程通过 `执行 / 使用 / 得到` 组合，并通过 `改变` 明确修改对象。
-- Acceptance criteria：
-  - [x] 流程可以声明输入和输出。
-  - [x] 流程可以读取对象字段。
-  - [x] 组合流程可以检查输入数量、输入类型和结果数量。
-  - [x] 被执行流程失败时，组合流程返回同一个失败结果。
-  - [x] 状态修改必须写在 `改变` 中。
+- User story: split business behavior into auditable flows and compose them.
+- Acceptance criteria:
+  - [x] Flows declare inputs and outputs.
+  - [x] Flows read object fields.
+  - [x] Composition checks input count, input types, and result count.
+  - [x] Failure propagates from an executed flow.
+  - [x] State mutation requires an explicit `change` statement.
 
-### 4. 语义与类型检查
+### 4. Semantic and type checks
 
-- User story：作为用户，我希望未声明或不兼容的业务语义在运行前被拒绝。
-- Description：检查名称、对象字段、流程组合、条件、运算、输出和状态修改。
-- Acceptance criteria：
-  - [x] 未定义名称会被拒绝。
-  - [x] 不兼容的值、业务类型、币种或单位不能直接参与不兼容运算。
-  - [x] 点号字段访问会被拒绝。
-  - [x] 非对象状态不能写入 `改变`。
-  - [x] 每条错误都说明原因和位置。
+- User story: reject undeclared or incompatible business semantics before runtime.
+- Acceptance criteria:
+  - [x] Undefined names are rejected.
+  - [x] Incompatible values, currencies, units, or types cannot be combined.
+  - [x] Dot access is rejected.
+  - [x] Non-object state cannot be mutated.
+  - [x] Diagnostics include cause and position.
 
-### 5. TypeScript/Node.js 编译后端
+### 5. TypeScript/Node.js backend
 
-- User story：作为用户，我希望检查通过的 AAL 能产生可执行程序。
-- Description：从 AST 生成确定性的 TypeScript，并提供运行入口。
-- Acceptance criteria：
-  - [x] 相同输入产生相同生成结果。
-  - [x] 生成结果可通过严格 TypeScript 检查。
-  - [x] 生成结果可在 Node.js 中运行。
-  - [x] 生成文件明确标记为自动生成内容。
+- User story: compile checked AAL into an executable program.
+- Acceptance criteria:
+  - [x] Identical input produces identical output.
+  - [x] Generated code passes strict TypeScript checks.
+  - [x] Generated code runs on Node.js.
+  - [x] Generated files identify themselves as artifacts.
 
-### 6. Binding 绑定层
+### 6. Optional Binding layer
 
-- User story：作为维护者，我希望 AAL 名称与程序名称之间的关系明确且可复现。
-- Description：用带稳定 ID 的 JSON 文件绑定对象、字段、流程、流程输入和流程输出。
-- Acceptance criteria：
-  - [x] Binding 可以把“库存 / 数量”绑定为 `Inventory / quantity`。
-  - [x] Binding 缺少或多出 AAL 名称时编译失败。
-  - [x] 同一 AAL 使用不同 Binding 时，生成程序名称随绑定明确变化。
-  - [x] Binding 不承载隐含业务规则。
+- User story: make relationships among audit names, stable IDs, and program names explicit and reproducible.
+- Description: an optional JSON file binds objects, fields, flows, inputs, and outputs. Without it, a deterministic per-build fallback is generated; durable identity across renames or reordering requires an explicit Binding.
+- Acceptance criteria:
+  - [x] Binding is optional for both English and Chinese AAL.
+  - [x] An explicit Binding can map `Order.number` to `Order.id` while preserving stable IDs.
+  - [x] Missing or extra entries in an explicit Binding are rejected.
+  - [x] Binding cannot carry hidden business rules.
 
-### 7. 订单库存验收样例
+### 7. Order and inventory acceptance example
 
-- User story：作为用户，我希望用真实业务流程验证语言是否有用。
-- Description：表达订单编号、库存数量、金额计算、库存不足和库存扣减。
-- Acceptance criteria：
-  - [x] 数量有效且库存充足时返回订单结果。
-  - [x] 库存不足时返回明确错误且不改变库存。
-  - [x] 数量无效时返回明确错误。
-  - [x] 成功路径会实际改变传入库存对象。
+- Acceptance criteria:
+  - [x] A valid order returns a result and changes inventory.
+  - [x] Insufficient inventory fails without mutation.
+  - [x] Invalid quantity fails explicitly.
+  - [x] English and Chinese examples preserve the same stable identities.
 
-### 8. 可复现编译测试
+### 8. Reproducible compiler tests
 
-- User story：作为维护者，我希望确认编译器不会因运行次数不同而改变结果。
-- Description：对解析、检查、生成和样例执行建立固定测试。
-- Acceptance criteria：
-  - [x] 测试可以一次运行完成。
-  - [x] 重复运行不会改变输出或测试结果。
-  - [x] 测试能区分解析错误、语义错误和运行结果错误。
+- Acceptance criteria:
+  - [x] Tests run in one command.
+  - [x] Repeated runs do not change output.
+  - [x] Tests distinguish parse, semantic, and runtime failures.
 
-## P1 Features
+## P1 features
 
-### 1. HTTP 接口
+### 1. HTTP interface
 
-把流程输入输出映射为显式 JSON HTTP 契约。
+Map flow inputs and outputs to an explicit JSON HTTP contract.
 
-### 2. SQLite 持久化
+### 2. SQLite persistence
 
-为稳定对象增加可审计的持久化边界。
+Add an auditable persistence boundary for stable objects.
 
-### 3. 重试与并发
+### 3. Retry and concurrency
 
-把次数、条件、顺序和并发关系作为显式语言语义，不由后端默认决定。
+Make counts, conditions, order, and concurrency explicit language semantics.
 
-## P2 Features
+## P2 features
 
-### 1. 多编译后端
-
-在 AAL 核心语义稳定后支持 Python、Go 或其他目标后端。
-
-### 2. AI 交互式前端
-
-让 AI 负责自然语言到 AAL 的转换和受控修改，但不参与确认后的确定性编译。
-
-### 3. 图形化编辑器与 UI 语言
-
-提供 AST 可视化，未来再考虑 UI 语义。
+- Multiple deterministic backends after core semantics stabilize.
+- An AI interaction layer from natural language to controlled AAL changes.
+- AST visualization and, later, UI semantics.

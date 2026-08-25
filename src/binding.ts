@@ -1,5 +1,6 @@
 import type { Program } from "./ast.js";
 import { error, type Diagnostic } from "./diagnostics.js";
+import { DEFAULT_LANGUAGE, localizeDiagnostics, type AALLanguage } from "./language.js";
 
 export interface BindingEntrySpec {
   readonly id: string;
@@ -49,7 +50,12 @@ export interface BindingResult {
 
 const LOCATION = { line: 1, column: 1 } as const;
 
-export function parseBinding(source: string): { readonly spec: BindingSpec | null; readonly diagnostics: readonly Diagnostic[] } {
+export function parseBinding(source: string, language: AALLanguage = DEFAULT_LANGUAGE): { readonly spec: BindingSpec | null; readonly diagnostics: readonly Diagnostic[] } {
+  const result = parseCanonicalBinding(source);
+  return { ...result, diagnostics: localizeDiagnostics(result.diagnostics, language) };
+}
+
+function parseCanonicalBinding(source: string): { readonly spec: BindingSpec | null; readonly diagnostics: readonly Diagnostic[] } {
   let value: unknown;
   try {
     value = JSON.parse(source) as unknown;
@@ -68,7 +74,12 @@ export function parseBinding(source: string): { readonly spec: BindingSpec | nul
   return { spec: { version: 1, objects, flows }, diagnostics };
 }
 
-export function resolveBinding(program: Program, spec?: BindingSpec): BindingResult {
+export function resolveBinding(program: Program, spec?: BindingSpec, language: AALLanguage = DEFAULT_LANGUAGE): BindingResult {
+  const result = resolveCanonicalBinding(program, spec);
+  return { ...result, diagnostics: localizeDiagnostics(result.diagnostics, language) };
+}
+
+function resolveCanonicalBinding(program: Program, spec?: BindingSpec): BindingResult {
   const diagnostics: Diagnostic[] = [];
   const actual = spec ?? createIdentityBinding(program);
   const objects = new Map<string, ResolvedObjectBinding>();

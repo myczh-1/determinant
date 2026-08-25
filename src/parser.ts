@@ -19,6 +19,7 @@ import {
   type TypeRef,
 } from "./ast.js";
 import { error, type Diagnostic } from "./diagnostics.js";
+import { DEFAULT_LANGUAGE, localizeDiagnostics, normalizeAALSource, type AALLanguage } from "./language.js";
 
 interface SourceLine {
   readonly number: number;
@@ -145,7 +146,17 @@ export interface ParseResult {
   readonly diagnostics: readonly Diagnostic[];
 }
 
-export function parseAAL(source: string): ParseResult {
+export interface ParseOptions {
+  readonly language?: AALLanguage;
+}
+
+export function parseAAL(source: string, options: ParseOptions = {}): ParseResult {
+  const language = options.language ?? DEFAULT_LANGUAGE;
+  const result = parseCanonicalAAL(normalizeAALSource(source, language));
+  return { ...result, diagnostics: localizeDiagnostics(result.diagnostics, language) };
+}
+
+function parseCanonicalAAL(source: string): ParseResult {
   const diagnostics: Diagnostic[] = [];
   const lines = source.replaceAll("\r\n", "\n").split("\n").map((text, index) => toSourceLine(text, index + 1));
   const meaningful = lines.filter((line) => !isIgnorable(line));
@@ -468,8 +479,10 @@ function parseType(text: string, line: SourceLine, column: number, diagnostics: 
   const money = /^(人民币|美元)金额(?:，单位为(.+))?$/.exec(text);
   if (money) {
     const currency = money[1] === "人民币" ? "CNY" : "USD";
-    const defaultUnit = money[1] === "人民币" ? "元" : "美元";
-    return { kind: "money", currency, unit: money[2]?.trim() || defaultUnit, scale: 2 };
+    const defaultUnit = money[1] === "人民币" ? "yuan" : "dollar";
+    const declaredUnit = money[2]?.trim();
+    const unit = declaredUnit === "元" ? "yuan" : declaredUnit === "美元" ? "dollar" : declaredUnit || defaultUnit;
+    return { kind: "money", currency, unit, scale: 2 };
   }
   if (isIdentifier(text)) return { kind: "object", name: text, fields: [] };
   diagnostics.push(error("类型必须是整数、文本、布尔、人民币金额、美元金额或对象名称", location(line.number, column)));

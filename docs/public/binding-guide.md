@@ -1,32 +1,34 @@
-# Binding 绑定指南
+# Binding Guide
 
-## 作用
+> Chinese version: [Binding 绑定指南](./binding-guide.zh-CN.md)
 
-Binding 是 AAL 审计名称和程序世界名称之间的明确绑定层。
+## Purpose
+
+Binding is an optional, explicit layer between AAL audit names, stable identities, and program-world names.
 
 ```text
-AAL：对象“库存”的“数量”
-Binding：库存 → Inventory，数量 → quantity
-生成代码：Inventory.quantity
+AAL: Inventory's number
+Binding: Inventory → InventoryRecord, number → quantity
+Generated code: InventoryRecord.quantity
 ```
 
-AAL 不需要知道 TypeScript、SDK 或数据库使用什么名称；编译器也不会猜测两个名称是否对应。
+AAL does not need to know the naming conventions of TypeScript, an SDK, or a database. The compiler does not guess whether two names refer to the same thing.
 
-## 文件位置
+## File format
 
-项目可以在 `bindings/` 下保存绑定文件。当前 P0 使用 JSON，示例是：
+P0 uses JSON binding files under `bindings/`. The example is:
 
 ```text
 bindings/order.binding.json
 ```
 
-绑定文件必须包含 `version: 1`、对象绑定和流程绑定。每个绑定都有：
+Each binding entry contains:
 
-- `id`：稳定的内部身份；
-- `auditName`：AAL 中的人类名称；
-- `programName`：生成程序使用的名称。
+- `id`: a stable internal identity;
+- `auditName`: the name used in AAL;
+- `programName`: the name used by generated code.
 
-对象还要绑定字段，流程还要绑定输入和输出。
+Objects bind their fields. Flows bind their inputs and outputs.
 
 ```json
 {
@@ -34,12 +36,12 @@ bindings/order.binding.json
   "objects": [
     {
       "id": "object_inventory",
-      "auditName": "库存",
-      "programName": "Inventory",
+      "auditName": "Inventory",
+      "programName": "InventoryRecord",
       "fields": [
         {
           "id": "field_inventory_quantity",
-          "auditName": "数量",
+          "auditName": "number",
           "programName": "quantity"
         }
       ]
@@ -49,24 +51,17 @@ bindings/order.binding.json
 }
 ```
 
-## 审计边界
+When provided, the binding must cover every object, field, flow, input, and output in the AAL source. Missing or extra entries are compilation errors. When omitted, the compiler creates a deterministic fallback for that build. That fallback is not a durable identity contract across source renames or declaration reordering.
 
-日常业务审计主要阅读 AAL。Binding 创建或变化时必须单独确认，因为它会影响生成程序的结构和外部接口名称。
+## Audit boundary
 
-Binding 只能表达名称和结构绑定，不能增加隐含的业务规则。金额换算、状态转换、外部对象拆分等能力属于后续 Adapter，不放进 P0 Binding。
+Normal business review focuses on AAL. A Binding file must be reviewed when it is created or changed because it changes generated names and external structure.
 
-构建需要同时记录：
+Binding may describe names and structural relationships. It must not silently add business rules. Amount conversion, enum conversion, object reshaping, and third-party behavior belong to a later Adapter layer.
 
-```text
-AAL / AST
-Binding
-Compiler
-标准库、Adapter 和 Runtime 配置
-```
+The generated file records a deterministic Binding fingerprint. A build identity should account for the AAL/AST, Binding, compiler, standard library, adapters, and runtime configuration.
 
-其中任一部分变化，都应产生新的构建身份。
-
-## 编译
+## Compile
 
 ```bash
 node bin/determinant.mjs \
@@ -75,4 +70,4 @@ node bin/determinant.mjs \
   --out generated/order.ts
 ```
 
-如果绑定缺少对象、字段、流程、输入或输出，编译器会拒绝生成代码。
+Generated TypeScript is an artifact. Change AAL to change business semantics; change Binding to change program-facing names.

@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createRequire } from "node:module";
 import test from "node:test";
 import { compileAAL, formatDiagnostic, parseAAL, parseBinding } from "../dist/index.js";
 
@@ -12,88 +12,73 @@ const bindingSource = readFileSync(new URL("../bindings/order.binding.json", imp
 const binding = parseBinding(bindingSource).spec;
 assert.ok(binding);
 
-test("parses and compiles the order example", () => {
-  const result = compileAAL(source);
+test("parses and compiles the default English example", () => {
+  const result = compileAAL(source, { binding });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.map(formatDiagnostic).join("\n"));
   assert.ok(result.program);
+  assert.equal(result.program.name, "OrderInventory");
   assert.equal(result.program.objects.length, 2);
   assert.equal(result.program.flows.length, 3);
-  assert.ok(result.code?.includes("function flow_0"));
-  assert.ok(result.code?.includes("function flow_2"));
+  assert.ok(result.code?.includes("function calculateOrderTotal"));
+  assert.ok(result.code?.includes("function createOrder"));
   assert.ok(result.code?.includes("export function run"));
 });
 
-test("parsing and generation are deterministic", () => {
+test("Binding is optional while explicit English Binding preserves durable IDs and program names", () => {
+  const implicit = compileAAL(source);
+  assert.equal(implicit.diagnostics.length, 0, implicit.diagnostics.map(formatDiagnostic).join("\n"));
+  assert.ok(implicit.code?.includes("function flow_2"));
+
+  const explicit = compileAAL(source, { binding });
+  assert.ok(explicit.code?.includes("export type Order"));
+  assert.ok(explicit.code?.includes('"id": number'));
+  assert.ok(explicit.code?.includes('"orderId"'));
+  assert.ok(!explicit.code?.includes('"orderNumber"'));
+});
+
+test("English parsing and generation are deterministic", () => {
   assert.deepEqual(parseAAL(source), parseAAL(source));
-  assert.equal(compileAAL(source).code, compileAAL(source).code);
+  assert.equal(compileAAL(source, { binding }).code, compileAAL(source, { binding }).code);
 });
 
-test("binding maps audit names to stable program names", () => {
-  const parsed = parseBinding(bindingSource);
-  assert.equal(parsed.diagnostics.length, 0, parsed.diagnostics.map(formatDiagnostic).join("\n"));
-  const result = compileAAL(source, { binding });
-  assert.equal(result.diagnostics.length, 0, result.diagnostics.map(formatDiagnostic).join("\n"));
-  assert.ok(result.code?.includes("export type Order"));
-  assert.ok(result.code?.includes('"quantity": number'));
-  assert.ok(result.code?.includes("function createOrder"));
-  assert.ok(result.code?.includes('"orderId"'));
-  assert.ok(!result.code?.includes('"订单编号"'));
-});
-
-test("rejects a binding that does not cover the AAL", () => {
+test("rejects incomplete Binding coverage", () => {
   const incomplete = JSON.parse(bindingSource);
   incomplete.objects[0].fields = [];
   const result = compileAAL(source, { binding: incomplete });
-  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.message.includes("对象 订单 的字段缺少绑定：编号")));
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.message.includes("missing a binding")));
   assert.equal(result.code, null);
 });
 
-test("rejects a dot-based field access", () => {
-  const result = compileAAL(source.replace("订单 的 编号", "订单.编号"));
-  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.message.includes("无法识别的字符：.")));
+test("rejects implementation-style field access", () => {
+  const result = compileAAL(source.replace("order's number", "order.number"));
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.message.includes("Unrecognized character")));
   assert.equal(result.code, null);
 });
 
-test("rejects an undeclared reference with a source location", () => {
-  const result = compileAAL(source.replace("单价 * 数量", "单价 * 不存在的数量"));
-  const diagnostic = result.diagnostics.find((item) => item.message.includes("未定义的名称：不存在的数量"));
-  assert.ok(diagnostic);
-  assert.ok(diagnostic.loc.line > 0);
-  assert.equal(result.code, null);
+test("reports English semantic diagnostics", () => {
+  const missing = compileAAL(source.replace("unitPrice * quantity", "unitPrice * missingQuantity"));
+  assert.ok(missing.diagnostics.some((diagnostic) => diagnostic.message.includes("Undefined name: missingQuantity")));
+
+  const arithmetic = compileAAL(source.replace("unitPrice * quantity", "unitPrice + quantity"));
+  assert.ok(arithmetic.diagnostics.some((diagnostic) => diagnostic.message.includes("does not support types")));
+
+  const condition = compileAAL(source.replace("quantity <= 0", "quantity + 1"));
+  assert.ok(condition.diagnostics.some((diagnostic) => diagnostic.message.includes("must be Boolean")));
 });
 
-test("rejects implicit money and integer arithmetic", () => {
-  const result = compileAAL(source.replace("单价 * 数量", "单价 + 数量"));
-  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.message.includes("运算 + 不支持类型")));
-  assert.equal(result.code, null);
+test("checks flow inputs and explicit state changes", () => {
+  const badInput = compileAAL(source.replace("            unitPrice\n            quantity", "            unitPrice\n            unitPrice"));
+  assert.ok(badInput.diagnostics.some((diagnostic) => diagnostic.message.includes("expected integer")));
+
+  const badChange = compileAAL(source.replace("inventory's quantity = inventory's quantity - quantity", "quantity = quantity - quantity"));
+  assert.ok(badChange.diagnostics.some((diagnostic) => diagnostic.message.includes("Change must target an object field")));
 });
 
-test("requires if conditions to be boolean", () => {
-  const result = compileAAL(source.replace("数量 <= 0", "数量 + 1"));
-  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.message.includes("如果条件必须是布尔条件")));
-  assert.equal(result.code, null);
-});
-
-test("checks flow input types and explicit state changes", () => {
-  const badInput = compileAAL(source.replace("            单价\n            数量", "            单价\n            单价"));
-  assert.ok(badInput.diagnostics.some((diagnostic) => diagnostic.message.includes("需要 整数")));
-  assert.equal(badInput.code, null);
-
-  const badChange = compileAAL(source.replace("库存 的 数量 = 库存 的 数量 - 数量", "数量 = 数量 - 数量"));
-  assert.ok(badChange.diagnostics.some((diagnostic) => diagnostic.message.includes("改变必须明确指向对象的字段")));
-  assert.equal(badChange.code, null);
-});
-
-test("executes generated TypeScript for success and failure paths", () => {
+test("executes generated English TypeScript", () => {
   const result = compileAAL(source, { binding });
   assert.ok(result.code);
-  const root = mkdtempSync(join(tmpdir(), "determinant-test-"));
-  const generatedPath = join(root, "order.ts");
-  const outputDirectory = join(root, "out");
-  writeFileSync(generatedPath, result.code, "utf8");
-  execFileSync("tsc", ["--strict", "--target", "ES2022", "--module", "commonjs", "--moduleResolution", "node", "--skipLibCheck", "--outDir", outputDirectory, generatedPath], { stdio: "pipe" });
-  const generated = createRequire(import.meta.url)(join(outputDirectory, "order.js"));
-  const price = generated.money("CNY", "元", 2, "19.90");
+  const generated = compileGenerated(result.code);
+  const price = generated.money("CNY", "yuan", 2, "19.90");
 
   const inventory = { quantity: 5 };
   const success = generated.run({ order: { id: 1001 }, inventory, unitPrice: price, quantity: 2 });
@@ -105,9 +90,18 @@ test("executes generated TypeScript for success and failure paths", () => {
 
   const insufficientInventory = { quantity: 1 };
   const insufficient = generated.run({ order: { id: 1001 }, inventory: insufficientInventory, unitPrice: price, quantity: 2 });
-  assert.deepEqual(insufficient, { ok: false, error: "库存不足" });
+  assert.deepEqual(insufficient, { ok: false, error: "insufficient inventory" });
   assert.equal(insufficientInventory.quantity, 1);
 
   const invalidQuantity = generated.run({ order: { id: 1001 }, inventory: { quantity: 5 }, unitPrice: price, quantity: 0 });
-  assert.deepEqual(invalidQuantity, { ok: false, error: "数量必须大于零" });
+  assert.deepEqual(invalidQuantity, { ok: false, error: "quantity must be greater than zero" });
 });
+
+function compileGenerated(code) {
+  const root = mkdtempSync(join(tmpdir(), "determinant-test-en-"));
+  const generatedPath = join(root, "order.ts");
+  const outputDirectory = join(root, "out");
+  writeFileSync(generatedPath, code, "utf8");
+  execFileSync("tsc", ["--strict", "--target", "ES2022", "--module", "commonjs", "--moduleResolution", "node", "--skipLibCheck", "--outDir", outputDirectory, generatedPath], { stdio: "pipe" });
+  return createRequire(import.meta.url)(join(outputDirectory, "order.js"));
+}

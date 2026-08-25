@@ -1,57 +1,56 @@
 # Ultimate Goals
 
-## Dream Experience
+## Dream experience
 
-用户可以用自然语言与 AI 讨论需求，但 AI 不直接交付一堆不可审计的代码。AI 将需求整理成一份用户能够逐条阅读、修改和确认的 AAL 程序。
+Users discuss requirements with AI without receiving an opaque body of generated code. AI organizes the requirements into AAL that the user can read, edit, and confirm line by line.
 
-用户确认 AAL 后，编译器独立完成检查和构建。用户审计的是业务语义，编译器负责稳定地处理 TypeScript、Node.js、数据库、HTTP 和其他实现细节。需要修改行为时，用户修改 AAL，生成代码随之更新。
+After confirmation, the compiler independently checks and builds the application. Users audit business semantics; deterministic tooling handles TypeScript, Node.js, databases, HTTP, and other implementation details. Changing behavior means changing AAL and regenerating artifacts.
 
-理想状态下，同一份 AAL 可以通过不同后端生成不同实现，但保持相同的可观察业务行为。
+Eventually, one AAL program may target multiple backends while preserving the same observable business behavior.
 
-## Long-Term Product Goals
+## Long-term product goals
 
-- 建立一门面向应用层业务语义的、可读且可执行的正式语言；
-- 让 AI 成为自然语言到 AAL 的交互式前端，而不是最终执行者；
-- 让业务决定、数据约束、状态变化和错误行为都可以被人类审计；
-- 支持多个确定性编译后端，同时保持统一的语言语义；
-- 支持从 AAL 生成程序、测试、诊断信息和可视化流程视图；
-- 让 AAL 的修改可以形成清晰的语义差异，而不是难以理解的大段代码差异。
+- Establish a readable, executable formal language for application behavior.
+- Make AI an interactive natural-language front end to AAL, not the final executor.
+- Make business decisions, constraints, state changes, and failures auditable.
+- Support multiple deterministic backends with shared core semantics.
+- Generate programs, tests, diagnostics, and visual flow views from AAL.
+- Produce semantic diffs instead of forcing users to inspect large code diffs.
 
-## Future Capabilities To Preserve
+## Future capabilities to preserve
 
-第一版不需要实现以下能力，但设计不应阻断它们：
+- HTTP, JSON, SQLite, third-party services, and scheduled tasks.
+- Explicit retry, concurrency, transactions, idempotency, and permissions.
+- Python, Go, C/WASM, and other backends.
+- AI-assisted natural-language-to-AAL workflows.
+- Navigation among AAL, AST, flow diagrams, and generated code.
+- Semantic versioning, reproducible builds, and artifact tracing.
+- Multiple human-language dialects sharing one core semantic model.
 
-- HTTP、JSON、SQLite、第三方服务和定时任务；
-- 重试、并发、事务、幂等和权限等应用层语义；
-- Python、Go、C/WASM 等其他编译后端；
-- 自然语言到 AAL 的 AI 协作流程；
-- AAL、AST、流程图和生成代码之间的互相定位；
-- AAL 语义版本化、可复现构建和生成结果追踪。
+## Architecture implications
 
-## Architecture Implications
+Avoid:
 
-### Avoid
+- treating generated TypeScript as business source;
+- hiding business decisions in parser or backend defaults;
+- placing an LLM after AAL confirmation;
+- allowing a Node.js backend to define core AAL semantics;
+- designing the language around one web, database, or UI framework;
+- adding compatibility layers for unconfirmed syntax.
 
-- 把生成的 TypeScript 当作业务源代码；
-- 在解析器或后端中偷偷补全币种、单位、权限、重试和回滚等业务决定；
-- 把 LLM 放在 AAL 确认后的解析、检查或编译路径中；
-- 让 Node.js 后端的实现限制反向定义 AAL 的核心语义；
-- 过早围绕某一个 Web 框架、数据库或 UI 框架设计语言核心；
-- 通过兼容层堆叠尚未确定的语法和语义。
+Prefer:
 
-### Prefer
+- a clear AAL → AST → backend boundary;
+- observable semantics before backend implementation;
+- separation of business meaning and runtime detail;
+- fixed examples, diagnostics, and reproducible tests;
+- a small set of explicit language primitives;
+- explicit errors or controlled native-module boundaries for unsupported behavior.
 
-- AAL → AST → 目标后端的清晰边界；
-- 先定义可观察语义，再选择 TypeScript/Node.js 实现方式；
-- 将业务语义与运行时实现细节分离；
-- 用固定样例、诊断和可复现测试约束编译器行为；
-- 通过少量明确的语言原语扩展，而不是引入泛化框架；
-- 让无法表达的能力明确报错或下沉到受控的原生模块边界。
+## Explicit non-goals
 
-## Explicit Non-Goals
-
-- 不把项目定位成中文关键字版 JavaScript/TypeScript；
-- 不承诺用 AAL 表达所有软件、所有 UI 或所有底层系统能力；
-- 不把“AI 能直接生成代码”作为项目的核心技术成果；
-- 不以隐藏所有复杂度为目标，现实中无法抽象的复杂语义必须明确暴露或下沉；
-- 不在第一阶段追求多后端、多平台和完整开发环境。
+- A keyword-renamed JavaScript or TypeScript.
+- A language for every software system, UI, and low-level concern.
+- AI code generation as the core technical result.
+- Hiding complexity that cannot be soundly abstracted.
+- Multiple backends, platforms, and a complete development environment in the first stage.

@@ -16,7 +16,7 @@ The repository currently contains the P0 language and compiler loop:
 - flows, conditions, calculations, explicit state changes, and flow composition;
 - deterministic parsing and semantic diagnostics;
 - explicit money types and basic arithmetic;
-- Binding files for stable IDs and program-facing names;
+- optional Binding files for stable IDs and program-facing names;
 - TypeScript generation and executable order/inventory tests.
 
 The HTTP layer is intentionally not part of the current scope. The next protocol layer will be designed separately.
@@ -26,40 +26,42 @@ The HTTP layer is intentionally not part of the current scope. The next protocol
 ```bash
 npm test
 npm run compile:example
+npm run test:zh
+npm run compile:example:zh
 ```
 
-The example is compiled with [bindings/order.binding.json](bindings/order.binding.json) and written to the ignored `generated/order.ts` path.
+English is the default AAL dialect. Chinese sources use `--language zh-CN` and the `.zh-CN` filename suffix. Both examples include an explicit Binding. When `--binding` is omitted, the compiler creates a deterministic fallback for that build; use an explicit Binding when IDs and program-facing names must remain stable across source renames or reordering.
 
 ## AAL example
 
 ```aal
-应用：订单库存
+application: OrderInventory
 
-对象：库存
+object: Inventory
 
-    数量：整数
+    quantity: integer
 
-流程：扣减库存
+flow: DeductInventory
 
-    输入：
-        库存：库存
-        数量：整数
+    input:
+        inventory: Inventory
+        quantity: integer
 
-    如果 库存 的 数量 < 数量：
-        失败：库存不足
+    if inventory's quantity < quantity:
+        failure: Insufficient inventory
 
-    改变：
-        库存 的 数量 = 库存 的 数量 - 数量
+    change:
+        inventory's quantity = inventory's quantity - quantity
 
-    输出：
-        剩余库存 = 库存 的 数量
+    output:
+        remainingInventory = inventory's quantity
 ```
 
 ## Documentation
 
-- [AAL Authoring Guide](docs/public/aal-authoring-guide.en.md)
-- [Binding Guide](docs/public/binding-guide.en.md)
+- [AAL Authoring Guide](docs/public/aal-authoring-guide.md)
+- [Binding Guide](docs/public/binding-guide.md)
 - [中文说明](README.zh-CN.md)
-- [中文公开文档](docs/public/README.md)
+- [中文公开文档](docs/public/README.zh-CN.md)
 
 Generated files are build artifacts. Modify the AAL source or Binding file instead of editing generated TypeScript.

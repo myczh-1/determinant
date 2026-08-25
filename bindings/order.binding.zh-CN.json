@@ -3,24 +3,24 @@
   "objects": [
     {
       "id": "object_order",
-      "auditName": "Order",
+      "auditName": "订单",
       "programName": "Order",
       "fields": [
         {
           "id": "field_order_number",
-          "auditName": "number",
+          "auditName": "编号",
           "programName": "id"
         }
       ]
     },
     {
       "id": "object_inventory",
-      "auditName": "Inventory",
+      "auditName": "库存",
       "programName": "Inventory",
       "fields": [
         {
           "id": "field_inventory_quantity",
-          "auditName": "quantity",
+          "auditName": "数量",
           "programName": "quantity"
         }
       ]
@@ -29,92 +29,92 @@
   "flows": [
     {
       "id": "flow_calculate_order_total",
-      "auditName": "CalculateOrderTotal",
+      "auditName": "计算订单总价",
       "programName": "calculateOrderTotal",
       "inputs": [
         {
           "id": "input_calculate_order_total_unit_price",
-          "auditName": "unitPrice",
+          "auditName": "单价",
           "programName": "unitPrice"
         },
         {
           "id": "input_calculate_order_total_quantity",
-          "auditName": "quantity",
+          "auditName": "数量",
           "programName": "quantity"
         }
       ],
       "outputs": [
         {
           "id": "output_calculate_order_total_total",
-          "auditName": "total",
+          "auditName": "总价",
           "programName": "total"
         }
       ]
     },
     {
       "id": "flow_deduct_inventory",
-      "auditName": "DeductInventory",
+      "auditName": "扣减库存",
       "programName": "deductInventory",
       "inputs": [
         {
           "id": "input_deduct_inventory_inventory",
-          "auditName": "inventory",
+          "auditName": "库存",
           "programName": "inventory"
         },
         {
           "id": "input_deduct_inventory_quantity",
-          "auditName": "quantity",
+          "auditName": "数量",
           "programName": "quantity"
         }
       ],
       "outputs": [
         {
           "id": "output_deduct_inventory_remaining",
-          "auditName": "remainingInventory",
+          "auditName": "剩余库存",
           "programName": "remainingInventory"
         }
       ]
     },
     {
       "id": "flow_create_order",
-      "auditName": "CreateOrder",
+      "auditName": "创建订单",
       "programName": "createOrder",
       "inputs": [
         {
           "id": "input_create_order_order",
-          "auditName": "order",
+          "auditName": "订单",
           "programName": "order"
         },
         {
           "id": "input_create_order_inventory",
-          "auditName": "inventory",
+          "auditName": "库存",
           "programName": "inventory"
         },
         {
           "id": "input_create_order_unit_price",
-          "auditName": "unitPrice",
+          "auditName": "单价",
           "programName": "unitPrice"
         },
         {
           "id": "input_create_order_quantity",
-          "auditName": "quantity",
+          "auditName": "数量",
           "programName": "quantity"
         }
       ],
       "outputs": [
         {
           "id": "output_create_order_order_id",
-          "auditName": "orderNumber",
+          "auditName": "订单编号",
           "programName": "orderId"
         },
         {
           "id": "output_create_order_total",
-          "auditName": "total",
+          "auditName": "总价",
           "programName": "total"
         },
         {
           "id": "output_create_order_remaining",
-          "auditName": "remainingInventory",
+          "auditName": "剩余库存",
           "programName": "remainingInventory"
         }
       ]

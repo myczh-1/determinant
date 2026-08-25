@@ -1,10 +1,12 @@
 import type { Expression, FlowDeclaration, FlowSignature, Program, TypeRef } from "./ast.js";
 import { createProgramTypeInfo, flowKey, inferExpressionType, type Environment, type ProgramTypeInfo } from "./checker.js";
 import { bindingFingerprint, resolveBinding, type BindingSpec, type ResolvedBinding } from "./binding.js";
+import { DEFAULT_LANGUAGE, runtimeMessages, type AALLanguage } from "./language.js";
 
-export function generateTypeScript(program: Program, bindingInput?: BindingSpec | ResolvedBinding): string {
+export function generateTypeScript(program: Program, bindingInput?: BindingSpec | ResolvedBinding, language: AALLanguage = DEFAULT_LANGUAGE): string {
   const typeInfo = createProgramTypeInfo(program);
-  const binding = resolveBindingForGeneration(program, bindingInput);
+  const binding = resolveBindingForGeneration(program, bindingInput, language);
+  const messages = runtimeMessages(language);
   const objectAliases = new Map<string, string>();
   for (const object of program.objects) objectAliases.set(object.name, binding.objects.get(object.name)!.programName);
 
@@ -25,11 +27,11 @@ export function generateTypeScript(program: Program, bindingInput?: BindingSpec 
     "",
     "export function money(currency: string, unit: string, scale: number, value: string | number): Money {",
     "  const text = String(value).trim();",
-    "  if (!/^-?\\d+(?:\\.\\d+)?$/.test(text)) throw new Error(`金额格式无效：${text}`);",
+    `  if (!/^-?\\d+(?:\\.\\d+)?$/.test(text)) throw new Error(${JSON.stringify(messages.invalidMoney)} + ": " + text);`,
     "  const negative = text.startsWith(\"-\");",
     "  const unsigned = negative ? text.slice(1) : text;",
     "  const [whole, fraction = \"\"] = unsigned.split(\".\");",
-    "  if (fraction.length > scale) throw new Error(`金额精度超过声明：${text}`);",
+    `  if (fraction.length > scale) throw new Error(${JSON.stringify(messages.moneyPrecision)} + ": " + text);`,
     "  const base = 10n ** BigInt(scale);",
     "  const minor = BigInt(whole) * base + BigInt((fraction + \"0\".repeat(scale)).slice(0, scale) || \"0\");",
     "  return { kind: \"money\", currency, unit, scale, minor: negative ? -minor : minor };",
@@ -45,20 +47,20 @@ export function generateTypeScript(program: Program, bindingInput?: BindingSpec 
     "}",
     "",
     "function assertMoney(value: unknown, name: string, currency: string, unit: string, scale: number): Money {",
-    "  if (!value || typeof value !== \"object\" || (value as Money).kind !== \"money\") throw new Error(`${name} 必须是金额`);",
+    `  if (!value || typeof value !== "object" || (value as Money).kind !== "money") throw new Error(name + ${JSON.stringify(messages.moneyRequired)});`,
     "  const candidate = value as Money;",
-    "  if (candidate.currency !== currency || candidate.unit !== unit || candidate.scale !== scale) throw new Error(`${name} 的币种、单位或精度不匹配`);",
+    `  if (candidate.currency !== currency || candidate.unit !== unit || candidate.scale !== scale) throw new Error(name + ${JSON.stringify(messages.moneyMismatch)});`,
     "  const minor = typeof candidate.minor === \"bigint\" ? candidate.minor : BigInt(String((candidate as unknown as { minor: unknown }).minor));",
     "  return { ...candidate, minor };",
     "}",
     "",
     "function assertInteger(value: unknown, name: string): number {",
-    "  if (!Number.isSafeInteger(value)) throw new Error(`${name} 必须是整数`);",
+    `  if (!Number.isSafeInteger(value)) throw new Error(name + ${JSON.stringify(messages.integerRequired)});`,
     "  return value as number;",
     "}",
     "",
     "function assertObject(value: unknown, name: string): Record<string, unknown> {",
-    "  if (!value || typeof value !== \"object\") throw new Error(`${name} 必须是对象`);",
+    `  if (!value || typeof value !== "object") throw new Error(name + ${JSON.stringify(messages.objectRequired)});`,
     "  return value as Record<string, unknown>;",
     "}",
     "",
@@ -82,7 +84,7 @@ export function generateTypeScript(program: Program, bindingInput?: BindingSpec 
     "}",
     "",
     "function assertCompatibleMoney(left: Money, right: Money): void {",
-    "  if (left.currency !== right.currency || left.unit !== right.unit || left.scale !== right.scale) throw new Error(\"金额的币种、单位或精度不匹配\");",
+    `  if (left.currency !== right.currency || left.unit !== right.unit || left.scale !== right.scale) throw new Error(${JSON.stringify(messages.incompatibleMoney)});`,
     "}",
     "",
   ];
@@ -251,9 +253,9 @@ function typeScriptType(type: TypeRef, objectAliases: ReadonlyMap<string, string
   return "unknown";
 }
 
-function resolveBindingForGeneration(program: Program, input?: BindingSpec | ResolvedBinding): ResolvedBinding {
-  const result = input && isResolvedBinding(input) ? { binding: input, diagnostics: [] } : resolveBinding(program, input);
-  if (!result.binding) throw new Error(result.diagnostics.map((diagnostic) => diagnostic.message).join("；"));
+function resolveBindingForGeneration(program: Program, input: BindingSpec | ResolvedBinding | undefined, language: AALLanguage): ResolvedBinding {
+  const result = input && isResolvedBinding(input) ? { binding: input, diagnostics: [] } : resolveBinding(program, input, language);
+  if (!result.binding) throw new Error(result.diagnostics.map((diagnostic) => diagnostic.message).join(language === "zh-CN" ? "；" : "; "));
   return result.binding;
 }
 

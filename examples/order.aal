@@ -1,75 +1,76 @@
-应用：订单库存
+# Default English AAL example
+application: OrderInventory
 
-对象：订单
+object: Order
 
-    编号：整数
+    number: integer
 
-对象：库存
+object: Inventory
 
-    数量：整数
+    quantity: integer
 
-流程：计算订单总价
+flow: CalculateOrderTotal
 
-    输入：
-        单价：人民币金额
-        数量：整数
+    input:
+        unitPrice: CNY amount
+        quantity: integer
 
-    如果 数量 <= 0：
-        失败：数量必须大于零
+    if quantity <= 0:
+        failure: quantity must be greater than zero
 
-    计算：
-        总价 = 单价 * 数量
+    calculate:
+        total = unitPrice * quantity
 
-    输出：
-        总价
+    output:
+        total
 
-流程：扣减库存
+flow: DeductInventory
 
-    输入：
-        库存：库存
-        数量：整数
+    input:
+        inventory: Inventory
+        quantity: integer
 
-    如果 数量 <= 0：
-        失败：数量必须大于零
+    if quantity <= 0:
+        failure: quantity must be greater than zero
 
-    如果 库存 的 数量 < 数量：
-        失败：库存不足
+    if inventory's quantity < quantity:
+        failure: insufficient inventory
 
-    改变：
-        库存 的 数量 = 库存 的 数量 - 数量
+    change:
+        inventory's quantity = inventory's quantity - quantity
 
-    输出：
-        剩余库存 = 库存 的 数量
+    output:
+        remainingInventory = inventory's quantity
 
-流程：创建订单
+flow: CreateOrder
 
-    输入：
-        订单：订单
-        库存：库存
-        单价：人民币金额
-        数量：整数
+    input:
+        order: Order
+        inventory: Inventory
+        unitPrice: CNY amount
+        quantity: integer
 
-    执行：
-        计算订单总价
+    execute:
+        CalculateOrderTotal
 
-        使用：
-            单价
-            数量
+        use:
+            unitPrice
+            quantity
 
-        得到：
-            总价
+        get:
+            total
 
-    执行：
-        扣减库存
+    execute:
+        DeductInventory
 
-        使用：
-            库存
-            数量
+        use:
+            inventory
+            quantity
 
-        得到：
-            剩余库存
+        get:
+            remainingInventory
 
-    输出：
-        订单编号 = 订单 的 编号
-        总价
-        剩余库存
+    output:
+        orderNumber = order's number
+        total
+        remainingInventory
