@@ -58,7 +58,7 @@
 ### 6. Optional Binding layer
 
 - User story: make relationships among audit names, stable IDs, and program names explicit and reproducible.
-- Description: an optional JSON file binds objects, fields, flows, inputs, and outputs. Without it, a deterministic per-build fallback is generated; durable identity across renames or reordering requires an explicit Binding.
+- Description: an optional JSON file binds objects, fields, flows, inputs, and outputs. Without it, audit names are used directly as program names and deterministic temporary IDs are generated; durable identity across renames or reordering requires an explicit Binding.
 - Acceptance criteria:
   - [x] Binding is optional for both English and Chinese AAL.
   - [x] An explicit Binding can map `Order.number` to `Order.id` while preserving stable IDs.
@@ -80,17 +80,27 @@
   - [x] Repeated runs do not change output.
   - [x] Tests distinguish parse, semantic, and runtime failures.
 
+### 9. In-memory CRUD
+
+- [x] Objects declare identity explicitly.
+- [x] Create rejects duplicate identity.
+- [x] Query returns one object or an explicit failure.
+- [x] Change updates the stored object and delete removes it.
+
+### 10. HTTP entries
+
+- [x] GET, POST, PUT, and DELETE map request path/body fields to flows.
+- [x] Flow failures map to declared HTTP status codes.
+- [x] Invalid JSON and invalid inputs return 400; route misses return 404.
+- [x] Host and port stay outside AAL.
+
 ## P1 features
 
-### 1. HTTP interface
-
-Map flow inputs and outputs to an explicit JSON HTTP contract.
-
-### 2. SQLite persistence
+### 1. SQLite persistence
 
 Add an auditable persistence boundary for stable objects.
 
-### 3. Retry and concurrency
+### 2. Retry and concurrency
 
 Make counts, conditions, order, and concurrency explicit language semantics.
 

@@ -27,7 +27,7 @@ test("parses and compiles the default English example", () => {
 test("Binding is optional while explicit English Binding preserves durable IDs and program names", () => {
   const implicit = compileAAL(source);
   assert.equal(implicit.diagnostics.length, 0, implicit.diagnostics.map(formatDiagnostic).join("\n"));
-  assert.ok(implicit.code?.includes("function flow_2"));
+  assert.ok(implicit.code?.includes("function CreateOrder"));
 
   const explicit = compileAAL(source, { binding });
   assert.ok(explicit.code?.includes("export type Order"));

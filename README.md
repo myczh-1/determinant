@@ -28,16 +28,19 @@ Once the AAL is confirmed, subsequent program generation no longer depends on an
 
 ## AAL
 
-AAL currently keeps two primary concepts:
+AAL keeps two primary business concepts and one explicit external entry:
 
 ```text
 Object
 Flow
+HTTP entry
 ```
 
 An object describes what exists in the application.
 
 A flow describes what happens in the application.
+
+An HTTP entry maps an HTTP request to a flow. Host and port remain runtime configuration rather than business behavior.
 
 For example:
 
@@ -116,7 +119,7 @@ It tries to **reduce the scope of uncertainty and give it an explicit endpoint.*
 
 AAL uses human-readable audit names, while generated programs and external systems may use different names.
 
-Binding connects these identities explicitly.
+Binding can connect these identities explicitly when they need to differ.
 
 For example:
 
@@ -130,11 +133,11 @@ Stable ID: field_order_number
 Program field: id
 ```
 
-Binding is optional for experiments.
+Binding is optional auxiliary input, not a prerequisite for understanding or running an AAL application.
 
-When no explicit Binding is provided, Determinant can generate a deterministic temporary Binding for the current build.
+Without an explicit Binding, audit names are used directly as generated program names, while deterministic temporary IDs identify declarations for the current build. HTTP request fields also use the AAL input names unless the HTTP entry declares a local `as` alias.
 
-For maintained applications, use an explicit Binding whenever stable identities or program-facing names must survive source renames or declaration reordering.
+Use an explicit Binding when names must differ, stable identities must survive source renames or declaration reordering, or an existing program-facing interface must be preserved.
 
 Binding is not everyday business logic. Business behavior is reviewed primarily in AAL; a Binding is reviewed separately when it is created or changed.
 
@@ -149,7 +152,10 @@ The repository contains a minimal deterministic compiler loop:
 - Conditions and explicit failures
 - Calculations
 - Explicit state changes
+- Object identity, create, single-object query, and delete
 - Flow composition
+- Explicit HTTP entries and request mappings
+- In-memory CRUD runtime
 - Deterministic parsing
 - Semantic checks and diagnostics
 - Explicit money types
@@ -164,7 +170,7 @@ The current target runtime is:
 Node.js + TypeScript
 ```
 
-HTTP and CRUD are reserved for later iterations.
+Persistence, transactions, authentication, list queries, and external system adapters are not part of this MVP.
 
 ## Run
 
@@ -183,6 +189,34 @@ npm run compile:example:zh
 
 # All tests
 npm run test:all
+
+# Run the in-memory HTTP CRUD demo
+npm run demo:http
+
+# The same CRUD semantics through the Chinese AAL dialect
+npm run demo:http:zh
+```
+
+With the demo running:
+
+```bash
+curl -X POST http://127.0.0.1:3000/items \
+  -H "Content-Type: application/json" \
+  -d '{"id":1,"name":"Book"}'
+
+curl http://127.0.0.1:3000/items/1
+
+curl -X PUT http://127.0.0.1:3000/items/1 \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Notebook"}'
+
+curl -X DELETE http://127.0.0.1:3000/items/1
+```
+
+The equivalent direct command is:
+
+```bash
+node bin/determinant.mjs run examples/items.aal --host 127.0.0.1 --port 3000
 ```
 
 English is the default AAL dialect and uses filenames without a language suffix.

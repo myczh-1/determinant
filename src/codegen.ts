@@ -1,6 +1,6 @@
-import type { Expression, FlowDeclaration, FlowSignature, Program, TypeRef } from "./ast.js";
+import type { Expression, FlowDeclaration, Program, TypeRef } from "./ast.js";
 import { createProgramTypeInfo, flowKey, inferExpressionType, type Environment, type ProgramTypeInfo } from "./checker.js";
-import { bindingFingerprint, resolveBinding, type BindingSpec, type ResolvedBinding } from "./binding.js";
+import { bindingFingerprint, resolveBinding, type BindingSpec, type ResolvedBinding, type ResolvedObjectBinding } from "./binding.js";
 import { DEFAULT_LANGUAGE, runtimeMessages, type AALLanguage } from "./language.js";
 
 export function generateTypeScript(program: Program, bindingInput?: BindingSpec | ResolvedBinding, language: AALLanguage = DEFAULT_LANGUAGE): string {
@@ -12,6 +12,8 @@ export function generateTypeScript(program: Program, bindingInput?: BindingSpec 
 
   const flowAliases = new Map<string, string>();
   const outputAliases = new Map<string, string>();
+  const storeAliases = new Map<string, string>();
+  for (const [index, object] of program.objects.entries()) if (object.identityFields.length > 0) storeAliases.set(object.name, `store_${index}`);
   for (const [index, flow] of program.flows.entries()) {
     flowAliases.set(flowKey(flow.name), binding.flows.get(flow.name)!.programName);
     outputAliases.set(flow.name, `Output_${index}`);
@@ -64,6 +66,16 @@ export function generateTypeScript(program: Program, bindingInput?: BindingSpec 
     "  return value as Record<string, unknown>;",
     "}",
     "",
+    "function readHttpInput(value: unknown, kind: \"integer\" | \"text\" | \"boolean\", fromPath: boolean): { readonly ok: true; readonly value: unknown } | { readonly ok: false } {",
+    "  if (kind === \"integer\") {",
+    "    const parsed = fromPath && typeof value === \"string\" && /^-?(?:0|[1-9]\\d*)$/.test(value) ? Number(value) : value;",
+    "    return Number.isSafeInteger(parsed) ? { ok: true, value: parsed } : { ok: false };",
+    "  }",
+    "  if (kind === \"text\") return typeof value === \"string\" ? { ok: true, value } : { ok: false };",
+    "  if (fromPath && (value === \"true\" || value === \"false\")) return { ok: true, value: value === \"true\" };",
+    "  return typeof value === \"boolean\" ? { ok: true, value } : { ok: false };",
+    "}",
+    "",
     "function moneyAdd(left: Money, right: Money): Money {",
     "  assertCompatibleMoney(left, right);",
     "  return { ...left, minor: left.minor + right.minor };",
@@ -98,6 +110,16 @@ export function generateTypeScript(program: Program, bindingInput?: BindingSpec 
     lines.push("};", "");
   }
 
+  for (const object of program.objects) {
+    const storeName = storeAliases.get(object.name);
+    if (storeName) lines.push(`const ${storeName} = new Map<string, ${objectAliases.get(object.name)!}>();`);
+  }
+  if (storeAliases.size > 0) {
+    lines.push("", "export function resetStore(): void {");
+    for (const storeName of storeAliases.values()) lines.push(`  ${storeName}.clear();`);
+    lines.push("}", "");
+  }
+
   for (const flow of program.flows) {
     const signature = typeInfo.flowSignatures.get(flow.name)!;
     const alias = outputAliases.get(flow.name)!;
@@ -110,22 +132,28 @@ export function generateTypeScript(program: Program, bindingInput?: BindingSpec 
   }
 
   for (const flow of program.flows) {
-    lines.push(...generateFlow(flow, typeInfo, binding, objectAliases, outputAliases, flowAliases));
+    lines.push(...generateFlow(flow, program, typeInfo, binding, objectAliases, outputAliases, flowAliases, storeAliases));
     lines.push("");
   }
 
   const entry = program.flows.at(-1);
   if (entry) lines.push(...generateEntry(entry, typeInfo, binding, objectAliases, outputAliases, flowAliases));
+  if (program.httpEntries.length > 0) {
+    lines.push("");
+    lines.push(...generateHttp(program, typeInfo, binding, objectAliases, outputAliases, flowAliases, language));
+  }
   return `${lines.join("\n")}\n`;
 }
 
 function generateFlow(
   flow: FlowDeclaration,
+  program: Program,
   typeInfo: ProgramTypeInfo,
   binding: ResolvedBinding,
   objectAliases: ReadonlyMap<string, string>,
   outputAliases: ReadonlyMap<string, string>,
   flowAliases: ReadonlyMap<string, string>,
+  storeAliases: ReadonlyMap<string, string>,
 ): string[] {
   const signature = typeInfo.flowSignatures.get(flow.name)!;
   const functionName = flowAliases.get(flowKey(flow.name))!;
@@ -143,6 +171,8 @@ function generateFlow(
   const lines = [`function ${functionName}(${params.join(", ")}): FlowResult<${outputAlias}> {`];
   let calculationIndex = 0;
   let executeIndex = 0;
+  let createIndex = 0;
+  let queryIndex = 0;
   for (const statement of flow.statements) {
     if (statement.kind === "calculate") {
       const symbol = `calculation_${calculationIndex++}`;
@@ -160,6 +190,50 @@ function generateFlow(
       lines.push(`  ${renderExpression(statement.target, symbols, environment, binding)} = ${renderExpression(statement.expression, symbols, environment, binding)};`);
       continue;
     }
+    if (statement.kind === "create") {
+      const object = program.objects.find((candidate) => candidate.name === statement.objectName)!;
+      const objectType = typeInfo.objectTypes.get(statement.objectName)!;
+      const objectBinding = binding.objects.get(statement.objectName)!;
+      const symbol = `created_${createIndex++}`;
+      lines.push(`  const ${symbol}: ${objectAliases.get(statement.objectName)!} = {`);
+      for (const field of object.fields) {
+        const assignment = statement.assignments.find((candidate) => candidate.target.kind === "member" && candidate.target.property === field.name)!;
+        lines.push(`    ${JSON.stringify(objectBinding.fields.get(field.name)!.programName)}: ${renderExpression(assignment.expression, symbols, environment, binding)},`);
+      }
+      lines.push("  };");
+      const identity = renderIdentityKey(symbol, object, objectBinding);
+      const store = storeAliases.get(statement.objectName)!;
+      lines.push(`  const ${symbol}_key = ${identity};`);
+      lines.push(`  if (${store}.has(${symbol}_key)) return { ok: false, error: ${JSON.stringify(statement.failureMessage)} };`);
+      lines.push(`  ${store}.set(${symbol}_key, ${symbol});`);
+      symbols.set(statement.name, symbol);
+      environment.set(statement.name, objectType);
+      continue;
+    }
+    if (statement.kind === "query") {
+      const object = program.objects.find((candidate) => candidate.name === statement.objectName)!;
+      const objectType = typeInfo.objectTypes.get(statement.objectName)!;
+      const candidateSymbol = `query_candidate_${queryIndex}`;
+      const symbol = `query_${queryIndex++}`;
+      const querySymbols = new Map(symbols);
+      const queryEnvironment = new Map(environment);
+      querySymbols.set(statement.name, candidateSymbol);
+      queryEnvironment.set(statement.name, objectType);
+      lines.push(`  const ${symbol} = [...${storeAliases.get(object.name)!}.values()].find((${candidateSymbol}) => ${renderExpression(statement.condition, querySymbols, queryEnvironment, binding)});`);
+      lines.push(`  if (!${symbol}) return { ok: false, error: ${JSON.stringify(statement.failureMessage)} };`);
+      symbols.set(statement.name, symbol);
+      environment.set(statement.name, objectType);
+      continue;
+    }
+    if (statement.kind === "delete") {
+      const objectType = inferExpressionType(statement.expression, environment)!;
+      const object = program.objects.find((candidate) => candidate.name === (objectType.kind === "object" ? objectType.name : ""))!;
+      const objectBinding = binding.objects.get(object.name)!;
+      const rendered = renderExpression(statement.expression, symbols, environment, binding);
+      lines.push(`  ${storeAliases.get(object.name)!}.delete(${renderIdentityKey(rendered, object, objectBinding)});`);
+      continue;
+    }
+    if (statement.kind !== "execute") continue;
     const callSymbol = `execute_${executeIndex++}`;
     const called = typeInfo.flowSignatures.get(statement.flowName)!;
     const calledFunction = flowAliases.get(flowKey(statement.flowName))!;
@@ -212,6 +286,112 @@ function generateEntry(
   });
   lines.push(`  return ${functionName}(${args.join(", ")});`, "}");
   return lines;
+}
+
+function generateHttp(
+  program: Program,
+  typeInfo: ProgramTypeInfo,
+  binding: ResolvedBinding,
+  objectAliases: ReadonlyMap<string, string>,
+  outputAliases: ReadonlyMap<string, string>,
+  flowAliases: ReadonlyMap<string, string>,
+  language: AALLanguage,
+): string[] {
+  const messages = runtimeMessages(language);
+  const lines: string[] = [
+    "export interface HttpRequest { readonly method: string; readonly path: string; readonly body?: unknown; }",
+    "export interface HttpResponse { readonly status: number; readonly body?: unknown; }",
+    "",
+    "export function handleHttpRequest(request: HttpRequest): HttpResponse {",
+    "  const method = request.method.toUpperCase();",
+    "  const pathname = request.path.split(\"?\", 1)[0] || \"/\";",
+  ];
+  for (const [entryIndex, entry] of program.httpEntries.entries()) {
+    const flow = program.flows.find((candidate) => candidate.name === entry.targetFlow)!;
+    const signature = typeInfo.flowSignatures.get(entry.targetFlow)!;
+    const route = compileRoute(entry.path);
+    const match = `route_${entryIndex}`;
+    lines.push(`  const ${match} = method === ${JSON.stringify(entry.method)} ? new RegExp(${JSON.stringify(route.pattern)}).exec(pathname) : null;`);
+    lines.push(`  if (${match}) {`);
+    if (entry.bodyMappings.length > 0) {
+      lines.push("    const requestBody = request.body && typeof request.body === \"object\" && !Array.isArray(request.body) ? request.body as Record<string, unknown> : {};");
+    }
+    const parsedSymbols = new Map<string, string>();
+    for (const [inputIndex, input] of signature.inputs.entries()) {
+      const pathMapping = entry.pathMappings.find((mapping) => mapping.targetName === input.name);
+      const bodyMapping = entry.bodyMappings.find((mapping) => mapping.targetName === input.name);
+      const raw = pathMapping
+        ? `${match}[${route.parameters.indexOf(pathMapping.sourceName) + 1}]`
+        : `requestBody[${JSON.stringify(bodyMapping!.sourceName)}]`;
+      const parsed = `http_input_${entryIndex}_${inputIndex}`;
+      lines.push(`    const ${parsed} = readHttpInput(${raw}, ${JSON.stringify(input.type.kind)}, ${pathMapping ? "true" : "false"});`);
+      lines.push(`    if (!${parsed}.ok) return { status: 400, body: { error: ${JSON.stringify(messages.invalidRequest)} } };`);
+      parsedSymbols.set(input.name, `${parsed}.value as ${typeScriptType(input.type, objectAliases, outputAliases)}`);
+    }
+    const result = `http_result_${entryIndex}`;
+    const args = signature.inputs.map((input) => parsedSymbols.get(input.name)!);
+    lines.push(`    const ${result} = ${flowAliases.get(flowKey(flow.name))!}(${args.join(", ")});`);
+    lines.push(`    if (${result}.ok === false) {`);
+    for (const failure of entry.failureMappings) {
+      lines.push(`      if (${result}.error === ${JSON.stringify(failure.failureMessage)}) return { status: ${failure.status}, body: { error: ${result}.error } };`);
+    }
+    lines.push(`      return { status: 500, body: { error: ${result}.error } };`);
+    lines.push("    }");
+    if (entry.successStatus === 204) {
+      lines.push(`    return { status: ${entry.successStatus} };`);
+    } else {
+      lines.push(`    return { status: ${entry.successStatus}, body: {`);
+      for (const output of signature.output.fields) {
+        const internalName = binding.flows.get(flow.name)!.outputs.get(output.name)!.programName;
+        const value = `${result}.value[${JSON.stringify(internalName)}]`;
+        lines.push(`      ${JSON.stringify(output.name)}: ${serializeAuditValue(value, output.type, binding)},`);
+      }
+      lines.push("    } };");
+    }
+    lines.push("  }");
+  }
+  lines.push(`  return { status: 404, body: { error: ${JSON.stringify(messages.routeNotFound)} } };`, "}");
+  return lines;
+}
+
+function compileRoute(path: string): { pattern: string; parameters: string[] } {
+  const parameters: string[] = [];
+  let pattern = "^";
+  let index = 0;
+  for (const match of path.matchAll(/\{([\p{L}_][\p{L}\p{N}_]*)\}/gu)) {
+    pattern += escapeRegExp(path.slice(index, match.index));
+    pattern += "([^/]+)";
+    parameters.push(match[1]);
+    index = (match.index ?? 0) + match[0].length;
+  }
+  pattern += `${escapeRegExp(path.slice(index))}$`;
+  return { pattern, parameters };
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function serializeAuditValue(expression: string, type: TypeRef, binding: ResolvedBinding): string {
+  if (type.kind === "money") return `{ currency: ${expression}.currency, unit: ${expression}.unit, scale: ${expression}.scale, value: moneyValue(${expression}) }`;
+  if (type.kind === "object") {
+    const objectBinding = binding.objects.get(type.name)!;
+    const fields = type.fields.map((field) => {
+      const internalName = objectBinding.fields.get(field.name)!.programName;
+      return `${JSON.stringify(field.name)}: ${serializeAuditValue(`${expression}[${JSON.stringify(internalName)}]`, field.type, binding)}`;
+    });
+    return `{ ${fields.join(", ")} }`;
+  }
+  return expression;
+}
+
+function renderIdentityKey(
+  expression: string,
+  object: Program["objects"][number],
+  objectBinding: ResolvedObjectBinding,
+): string {
+  const values = object.identityFields.map((field) => `${expression}[${JSON.stringify(objectBinding.fields.get(field)!.programName)}]`);
+  return `JSON.stringify([${values.join(", ")}])`;
 }
 
 function renderExpression(expression: Expression, symbols: ReadonlyMap<string, string>, environment: Environment, binding: ResolvedBinding): string {

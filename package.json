@@ -10,12 +10,14 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "npm run test:en",
-    "test:en": "npm run build && node --test test/compiler.test.mjs",
+    "test": "npm run test:all",
+    "test:en": "npm run build && node --test test/compiler.test.mjs test/http.test.mjs",
     "test:zh": "npm run build && node --test test/compiler.zh-CN.test.mjs",
     "test:all": "npm run build && node --test test/*.test.mjs",
     "compile:example": "npm run build && node bin/determinant.mjs examples/order.aal --binding bindings/order.binding.json --out generated/order.ts",
-    "compile:example:zh": "npm run build && node bin/determinant.mjs examples/order.zh-CN.aal --language zh-CN --binding bindings/order.binding.zh-CN.json --out generated/order.zh-CN.ts"
+    "compile:example:zh": "npm run build && node bin/determinant.mjs examples/order.zh-CN.aal --language zh-CN --binding bindings/order.binding.zh-CN.json --out generated/order.zh-CN.ts",
+    "demo:http": "npm run build && node bin/determinant.mjs run examples/items.aal --host 127.0.0.1 --port 3000",
+    "demo:http:zh": "npm run build && node bin/determinant.mjs run examples/items.zh-CN.aal --language zh-CN --host 127.0.0.1 --port 3000"
   },
   "devDependencies": {
     "typescript": "5.9.3"

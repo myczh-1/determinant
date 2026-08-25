@@ -28,6 +28,8 @@ export function runtimeMessages(language: AALLanguage): {
   incompatibleMoney: string;
   integerRequired: string;
   objectRequired: string;
+  invalidRequest: string;
+  routeNotFound: string;
 } {
   return language === "zh-CN"
     ? {
@@ -38,6 +40,8 @@ export function runtimeMessages(language: AALLanguage): {
         incompatibleMoney: "金额的币种、单位或精度不匹配",
         integerRequired: "必须是整数",
         objectRequired: "必须是对象",
+        invalidRequest: "请求输入无效",
+        routeNotFound: "未找到路由",
       }
     : {
         invalidMoney: "Invalid amount",
@@ -47,6 +51,8 @@ export function runtimeMessages(language: AALLanguage): {
         incompatibleMoney: "Money currency, unit, or precision does not match",
         integerRequired: " must be an integer",
         objectRequired: " must be an object",
+        invalidRequest: "Invalid request input",
+        routeNotFound: "Not found",
       };
 }
 
@@ -57,7 +63,9 @@ function normalizeEnglishLine(text: string): string {
 
   const header = translateHeader(content, "application", "应用")
     ?? translateHeader(content, "object", "对象")
-    ?? translateHeader(content, "flow", "流程");
+    ?? translateHeader(content, "flow", "流程")
+    ?? translateHeader(content, "HTTP entry", "HTTP 入口")
+    ?? translateHeader(content, "http entry", "HTTP 入口");
   if (header) return `${indent}${header}`;
 
   const sections: Readonly<Record<string, string>> = {
@@ -68,6 +76,18 @@ function normalizeEnglishLine(text: string): string {
     "use:": "使用：",
     "get:": "得到：",
     "output:": "输出：",
+    "identity:": "身份：",
+    "create:": "创建：",
+    "with:": "包含：",
+    "otherwise:": "否则：",
+    "query:": "查询：",
+    "where:": "条件：",
+    "delete:": "删除：",
+    "receive:": "接收：",
+    "use flow:": "使用流程：",
+    "request body:": "请求体：",
+    "request path:": "请求路径：",
+    "success:": "成功：",
   };
   if (sections[content]) return `${indent}${sections[content]}`;
 
@@ -76,6 +96,10 @@ function normalizeEnglishLine(text: string): string {
   }
   if (content.startsWith("failure:")) {
     return `${indent}失败：${content.slice("failure:".length).trim()}`;
+  }
+  if (content.startsWith("return ")) return `${indent}返回 ${content.slice("return ".length).trim()}`;
+  if (/^[\p{L}_][\p{L}\p{N}_]*\s+as\s+[\p{L}_][\p{L}\p{N}_]*$/u.test(content)) {
+    return `${indent}${content.replace(/\s+as\s+/u, " 作为 ")}`;
   }
 
   const typed = /^([^:]+):\s*(.+)$/u.exec(content);
@@ -115,10 +139,40 @@ function localizeMessage(message: string): string {
     ["程序必须至少声明一个流程", "The program must declare at least one flow"],
     ["对象名称必须是标识符", "Object name must be an identifier"],
     ["对象至少需要一个字段", "An object must have at least one field"],
+    ["对象成员必须缩进 4 个空格", "Object members must be indented by 4 spaces"],
+    ["对象字段格式应为“名称：类型”", "Object field format must be 'name: type'"],
+    ["对象字段名称必须是标识符", "Object field name must be an identifier"],
+    ["身份字段必须是标识符", "Identity field must be an identifier"],
     ["流程名称必须是标识符", "Flow name must be an identifier"],
     ["流程成员必须缩进 4 个空格", "Flow members must be indented by 4 spaces"],
     ["无法识别的流程语句：", "Unknown flow statement: "],
     ["流程必须包含输出", "A flow must contain an output section"],
+    ["创建必须先声明“名称：对象类型”", "Create must first declare 'name: object type'"],
+    ["创建内容必须缩进 8 个空格", "Create content must be indented by 8 spaces"],
+    ["创建必须包含字段赋值", "Create must assign object fields"],
+    ["创建必须包含否则失败", "Create must declare an otherwise failure"],
+    ["无法识别的创建内容：", "Unknown create content: "],
+    ["查询必须先声明“名称：对象类型”", "Query must first declare 'name: object type'"],
+    ["查询内容必须缩进 8 个空格", "Query content must be indented by 8 spaces"],
+    ["MVP 查询必须且只能包含一个条件", "An MVP query must contain exactly one condition"],
+    ["查询必须包含条件", "Query must contain a condition"],
+    ["查询必须包含否则失败", "Query must declare an otherwise failure"],
+    ["无法识别的查询内容：", "Unknown query content: "],
+    ["MVP 删除必须且只能指定一个对象", "MVP delete must specify exactly one object"],
+    ["否则必须包含缩进 ", "Otherwise must contain an indented "],
+    ["创建格式应为“名称：对象类型”", "Create format must be 'name: object type'"],
+    ["查询格式应为“名称：对象类型”", "Query format must be 'name: object type'"],
+    ["HTTP 入口名称不能为空", "HTTP entry name cannot be empty"],
+    ["HTTP 入口成员必须缩进 4 个空格", "HTTP entry members must be indented by 4 spaces"],
+    ["接收格式应为“GET /path”", "Receive format must be 'GET /path'"],
+    ["使用流程必须指定流程名称", "Use flow must specify a flow name"],
+    ["HTTP 失败消息不能为空", "HTTP failure message cannot be empty"],
+    ["无法识别的 HTTP 入口内容：", "Unknown HTTP entry content: "],
+    ["HTTP 入口必须包含接收", "HTTP entry must contain receive"],
+    ["HTTP 入口必须包含使用流程", "HTTP entry must contain use flow"],
+    ["HTTP 入口必须包含成功状态", "HTTP entry must contain a success status"],
+    ["HTTP 字段格式应为“字段”或“外部字段 as 输入字段”", "HTTP field format must be 'field' or 'external_field as input_field'"],
+    ["HTTP 状态格式应为缩进 8 个空格的“return 200”", "HTTP status format must be an 8-space-indented 'return 200'"],
     ["如果语句必须包含缩进 8 个空格的“失败：消息”", "An if statement must contain an 8-space-indented 'failure: message'"],
     ["失败消息不能为空", "Failure message cannot be empty"],
     ["表达式不能为空", "Expression cannot be empty"],
@@ -138,6 +192,9 @@ function localizeMessage(message: string): string {
     ["输出名称必须是标识符", "Output name must be an identifier"],
     ["类型必须是整数、文本、布尔、人民币金额、美元金额或对象名称", "Type must be integer, text, boolean, CNY amount, USD amount, or an object name"],
     ["对象重复声明：", "Duplicate object declaration: "],
+    ["的身份字段重复：", " has a duplicate identity field: "],
+    ["的身份引用了未声明字段：", " identity references an undeclared field: "],
+    ["的身份字段必须是整数、文本或布尔：", " identity field must be integer, text, or boolean: "],
     ["流程重复声明：", "Duplicate flow declaration: "],
     ["流程输入 ", "Flow input "],
     [" 类型不匹配：需要 ", " type mismatch: expected "],
@@ -152,6 +209,32 @@ function localizeMessage(message: string): string {
     ["改变必须明确指向对象的字段，例如 库存 的 数量", "Change must target an object field, for example inventory's quantity"],
     ["改变只能修改对象状态，不能修改计算结果或流程输出", "Change can only mutate object state"],
     ["改变的类型不匹配：需要 ", "Change type mismatch: expected "],
+    ["不能改变对象身份字段：", "Object identity fields cannot be changed: "],
+    ["创建引用了未声明的对象：", "Create references an undeclared object: "],
+    ["创建只能给 ", "Create can only assign fields on "],
+    ["创建字段重复赋值：", "Duplicate create field assignment: "],
+    ["创建字段 ", "Create field "],
+    ["创建缺少字段：", "Create is missing field: "],
+    ["查询引用了未声明的对象：", "Query references an undeclared object: "],
+    ["查询条件必须是布尔条件", "Query condition must be Boolean"],
+    ["删除必须指定当前流程中创建或查询到的对象", "Delete must target an object created or queried in the current flow"],
+    ["删除必须指定一个对象", "Delete must target an object"],
+    ["用于 CRUD 时必须声明身份", " must declare identity when used by CRUD"],
+    ["HTTP 入口重复声明：", "Duplicate HTTP entry: "],
+    ["HTTP 路由重复声明：", "Duplicate HTTP route: "],
+    ["HTTP 成功状态必须是 2xx", "HTTP success status must be 2xx"],
+    ["HTTP 失败状态必须是 4xx 或 5xx", "HTTP failure status must be 4xx or 5xx"],
+    ["HTTP 入口引用了未声明的流程：", "HTTP entry references an undeclared flow: "],
+    ["HTTP 输入重复映射：", "Duplicate HTTP input mapping: "],
+    ["HTTP 映射引用了未声明的流程输入：", "HTTP mapping references an undeclared flow input: "],
+    ["HTTP MVP 输入暂不支持类型：", "HTTP MVP does not support input type: "],
+    ["HTTP 请求字段重复：", "Duplicate HTTP request field: "],
+    ["HTTP 入口缺少流程输入映射：", "HTTP entry is missing a flow input mapping: "],
+    ["请求路径缺少参数映射：", "Request path is missing a parameter mapping: "],
+    ["请求路径映射未出现在路由中：", "Request path mapping does not appear in the route: "],
+    ["HTTP 失败重复映射：", "Duplicate HTTP failure mapping: "],
+    ["HTTP 映射了流程不会产生的失败：", "HTTP maps a failure the flow cannot produce: "],
+    ["HTTP 入口缺少失败映射：", "HTTP entry is missing a failure mapping: "],
     ["未找到流程：", "Flow not found: "],
     ["引用了未定义的名称：", "Undefined name: "],
     ["不能读取类型 ", "Cannot read a field from type "],

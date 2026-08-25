@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "objects": [
+    {
+      "id": "object_item",
+      "auditName": "Item",
+      "programName": "ItemRecord",
+      "fields": [
+        {
+          "id": "field_item_id",
+          "auditName": "id",
+          "programName": "itemId"
+        },
+        {
+          "id": "field_item_name",
+          "auditName": "name",
+          "programName": "displayName"
+        }
+      ]
+    }
+  ],
+  "flows": [
+    {
+      "id": "flow_create_item",
+      "auditName": "CreateItem",
+      "programName": "createItemRecord",
+      "inputs": [
+        { "id": "input_create_item_id", "auditName": "id", "programName": "itemId" },
+        { "id": "input_create_item_name", "auditName": "name", "programName": "displayName" }
+      ],
+      "outputs": [
+        { "id": "output_create_item_item", "auditName": "item", "programName": "createdItem" }
+      ]
+    },
+    {
+      "id": "flow_read_item",
+      "auditName": "ReadItem",
+      "programName": "readItemRecord",
+      "inputs": [
+        { "id": "input_read_item_id", "auditName": "id", "programName": "itemId" }
+      ],
+      "outputs": [
+        { "id": "output_read_item_item", "auditName": "item", "programName": "foundItem" }
+      ]
+    },
+    {
+      "id": "flow_update_item",
+      "auditName": "UpdateItem",
+      "programName": "updateItemRecord",
+      "inputs": [
+        { "id": "input_update_item_id", "auditName": "id", "programName": "itemId" },
+        { "id": "input_update_item_name", "auditName": "name", "programName": "displayName" }
+      ],
+      "outputs": [
+        { "id": "output_update_item_item", "auditName": "item", "programName": "updatedItem" }
+      ]
+    },
+    {
+      "id": "flow_delete_item",
+      "auditName": "DeleteItem",
+      "programName": "deleteItemRecord",
+      "inputs": [
+        { "id": "input_delete_item_id", "auditName": "id", "programName": "itemId" }
+      ],
+      "outputs": [
+        { "id": "output_delete_item_id", "auditName": "id", "programName": "deletedItemId" }
+      ]
+    }
+  ]
+}

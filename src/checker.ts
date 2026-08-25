@@ -28,6 +28,7 @@ export function checkAAL(program: Program, language: AALLanguage = DEFAULT_LANGU
   const typeInfo = createProgramTypeInfo(program);
   checkDeclarations(program.objects, typeInfo, diagnostics);
   checkFlows(program, typeInfo, diagnostics);
+  checkHttpEntries(program, typeInfo, diagnostics);
   return localizeDiagnostics(diagnostics, language);
 }
 
@@ -93,6 +94,9 @@ function populateOutputTypes(
               environment.set(statement.outputs[index], called.output.fields[index].type);
             }
           }
+        } else if (statement.kind === "create" || statement.kind === "query") {
+          const objectType = objects.get(statement.objectName);
+          if (objectType) environment.set(statement.name, objectType);
         }
       }
       signatures.set(flow.name, {
@@ -117,6 +121,14 @@ function checkDeclarations(objects: readonly ObjectDeclaration[], typeInfo: Prog
     if (objectNames.has(object.name)) diagnostics.push(error(`对象重复声明：${object.name}`, object.loc));
     objectNames.add(object.name);
     checkFields(object.fields, `对象 ${object.name} 的字段`, typeInfo.objectTypes, diagnostics);
+    const identityNames = new Set<string>();
+    for (const identity of object.identityFields) {
+      if (identityNames.has(identity)) diagnostics.push(error(`对象 ${object.name} 的身份字段重复：${identity}`, object.loc));
+      identityNames.add(identity);
+      const field = object.fields.find((candidate) => candidate.name === identity);
+      if (!field) diagnostics.push(error(`对象 ${object.name} 的身份引用了未声明字段：${identity}`, object.loc));
+      else if (!["integer", "text", "boolean"].includes(field.type.kind)) diagnostics.push(error(`对象 ${object.name} 的身份字段必须是整数、文本或布尔：${identity}`, field.loc ?? object.loc));
+    }
   }
 }
 
@@ -125,15 +137,16 @@ function checkFlows(program: Program, typeInfo: ProgramTypeInfo, diagnostics: Di
   for (const flow of program.flows) {
     if (flowNames.has(flow.name)) diagnostics.push(error(`流程重复声明：${flow.name}`, flow.loc));
     flowNames.add(flow.name);
-    checkFlow(flow, typeInfo, diagnostics);
+    checkFlow(flow, program, typeInfo, diagnostics);
   }
 }
 
-function checkFlow(flow: FlowDeclaration, typeInfo: ProgramTypeInfo, diagnostics: Diagnostic[]): void {
+function checkFlow(flow: FlowDeclaration, program: Program, typeInfo: ProgramTypeInfo, diagnostics: Diagnostic[]): void {
   const signature = typeInfo.flowSignatures.get(flow.name);
   if (!signature) return;
 
   const environment: Environment = new Map();
+  const storedObjectNames = new Set<string>();
   const inputNames = new Set<string>();
   for (const input of flow.inputs) {
     if (inputNames.has(input.name)) diagnostics.push(error(`流程 ${flow.name} 的输入重复声明：${input.name}`, input.loc));
@@ -165,6 +178,64 @@ function checkFlow(flow: FlowDeclaration, typeInfo: ProgramTypeInfo, diagnostics
       continue;
     }
 
+    if (statement.kind === "create") {
+      const objectType = typeInfo.objectTypes.get(statement.objectName);
+      if (!objectType) {
+        diagnostics.push(error(`创建引用了未声明的对象：${statement.objectName}`, statement.loc));
+        continue;
+      }
+      requireIdentity(program.objects.find((object) => object.name === statement.objectName) ?? null, statement.loc, diagnostics);
+      if (environment.has(statement.name)) diagnostics.push(error(`名称重复定义：${statement.name}`, statement.loc));
+      const assignmentEnvironment = new Map(environment);
+      assignmentEnvironment.set(statement.name, objectType);
+      const assigned = new Set<string>();
+      for (const assignment of statement.assignments) {
+        if (assignment.target.kind !== "member" || assignment.target.object.kind !== "reference" || assignment.target.object.name !== statement.name) {
+          diagnostics.push(error(`创建只能给 ${statement.name} 的字段赋值`, assignment.loc));
+          continue;
+        }
+        const fieldName = assignment.target.property;
+        if (assigned.has(fieldName)) diagnostics.push(error(`创建字段重复赋值：${fieldName}`, assignment.loc));
+        assigned.add(fieldName);
+        const targetType = inferExpressionType(assignment.target, assignmentEnvironment, diagnostics);
+        const valueType = inferExpressionType(assignment.expression, environment, diagnostics);
+        if (targetType && valueType && !areSameType(targetType, valueType)) {
+          diagnostics.push(error(`创建字段 ${fieldName} 类型不匹配：需要 ${describeType(targetType)}，实际是 ${describeType(valueType)}`, assignment.loc));
+        }
+      }
+      for (const field of objectType.fields) if (!assigned.has(field.name)) diagnostics.push(error(`创建缺少字段：${field.name}`, statement.loc));
+      environment.set(statement.name, objectType);
+      storedObjectNames.add(statement.name);
+      continue;
+    }
+
+    if (statement.kind === "query") {
+      const objectType = typeInfo.objectTypes.get(statement.objectName);
+      if (!objectType) {
+        diagnostics.push(error(`查询引用了未声明的对象：${statement.objectName}`, statement.loc));
+        continue;
+      }
+      requireIdentity(program.objects.find((object) => object.name === statement.objectName) ?? null, statement.loc, diagnostics);
+      if (environment.has(statement.name)) diagnostics.push(error(`名称重复定义：${statement.name}`, statement.loc));
+      const queryEnvironment = new Map(environment);
+      queryEnvironment.set(statement.name, objectType);
+      const conditionType = inferExpressionType(statement.condition, queryEnvironment, diagnostics);
+      if (conditionType && conditionType.kind !== "boolean") diagnostics.push(error("查询条件必须是布尔条件", statement.condition.loc));
+      environment.set(statement.name, objectType);
+      storedObjectNames.add(statement.name);
+      continue;
+    }
+
+    if (statement.kind === "delete") {
+      if (statement.expression.kind !== "reference" || !storedObjectNames.has(statement.expression.name)) {
+        diagnostics.push(error("删除必须指定当前流程中创建或查询到的对象", statement.loc));
+      }
+      const deletedType = inferExpressionType(statement.expression, environment, diagnostics);
+      if (deletedType && deletedType.kind !== "object") diagnostics.push(error("删除必须指定一个对象", statement.loc));
+      if (deletedType?.kind === "object") requireIdentity(program.objects.find((object) => object.name === deletedType.name) ?? null, statement.loc, diagnostics);
+      continue;
+    }
+
     if (statement.kind === "change") {
       if (statement.target.kind !== "member") {
         diagnostics.push(error("改变必须明确指向对象的字段，例如 库存 的 数量", statement.loc));
@@ -174,6 +245,10 @@ function checkFlow(flow: FlowDeclaration, typeInfo: ProgramTypeInfo, diagnostics
       const rootType = inferExpressionType(root, environment, diagnostics);
       if (rootType && rootType.kind !== "object") {
         diagnostics.push(error("改变只能修改对象状态，不能修改计算结果或流程输出", statement.loc));
+      }
+      if (statement.target.object.kind === "reference" && storedObjectNames.has(statement.target.object.name) && rootType?.kind === "object") {
+        const declaration = program.objects.find((object) => object.name === rootType.name);
+        if (declaration?.identityFields.includes(statement.target.property)) diagnostics.push(error(`不能改变对象身份字段：${statement.target.property}`, statement.loc));
       }
       const targetType = inferExpressionType(statement.target, environment, diagnostics);
       const valueType = inferExpressionType(statement.expression, environment, diagnostics);
@@ -218,6 +293,77 @@ function checkFlow(flow: FlowDeclaration, typeInfo: ProgramTypeInfo, diagnostics
   const output = checkOutputs(flow.outputs, environment, flow.name, diagnostics);
   (typeInfo.flowSignatures as Map<string, FlowSignature>).set(flow.name, { ...signature, output });
 }
+
+function checkHttpEntries(program: Program, typeInfo: ProgramTypeInfo, diagnostics: Diagnostic[]): void {
+  const names = new Set<string>();
+  const routes = new Set<string>();
+  for (const entry of program.httpEntries) {
+    if (names.has(entry.name)) diagnostics.push(error(`HTTP 入口重复声明：${entry.name}`, entry.loc));
+    names.add(entry.name);
+    const routeKey = `${entry.method} ${entry.path.replace(/\{[\p{L}_][\p{L}\p{N}_]*\}/gu, "{}")}`;
+    if (routes.has(routeKey)) diagnostics.push(error(`HTTP 路由重复声明：${routeKey}`, entry.loc));
+    routes.add(routeKey);
+    if (entry.successStatus < 200 || entry.successStatus > 299) diagnostics.push(error("HTTP 成功状态必须是 2xx", entry.loc));
+    for (const failure of entry.failureMappings) {
+      if (failure.status < 400 || failure.status > 599) diagnostics.push(error("HTTP 失败状态必须是 4xx 或 5xx", failure.loc));
+    }
+
+    const flow = program.flows.find((candidate) => candidate.name === entry.targetFlow);
+    const signature = typeInfo.flowSignatures.get(entry.targetFlow);
+    if (!flow || !signature) {
+      diagnostics.push(error(`HTTP 入口引用了未声明的流程：${entry.targetFlow}`, entry.loc));
+      continue;
+    }
+    const mappings = [...entry.pathMappings, ...entry.bodyMappings];
+    const targetNames = new Set<string>();
+    const sourceByLocation = new Set<string>();
+    for (const mapping of mappings) {
+      if (targetNames.has(mapping.targetName)) diagnostics.push(error(`HTTP 输入重复映射：${mapping.targetName}`, mapping.loc));
+      targetNames.add(mapping.targetName);
+      const input = signature.inputs.find((candidate) => candidate.name === mapping.targetName);
+      if (!input) diagnostics.push(error(`HTTP 映射引用了未声明的流程输入：${mapping.targetName}`, mapping.loc));
+      else if (!["integer", "text", "boolean"].includes(input.type.kind)) diagnostics.push(error(`HTTP MVP 输入暂不支持类型：${describeType(input.type)}`, mapping.loc));
+      const locationKey = `${entry.pathMappings.includes(mapping) ? "path" : "body"}:${mapping.sourceName}`;
+      if (sourceByLocation.has(locationKey)) diagnostics.push(error(`HTTP 请求字段重复：${mapping.sourceName}`, mapping.loc));
+      sourceByLocation.add(locationKey);
+    }
+    for (const input of signature.inputs) if (!targetNames.has(input.name)) diagnostics.push(error(`HTTP 入口缺少流程输入映射：${input.name}`, entry.loc));
+
+    const placeholders = [...entry.path.matchAll(/\{([\p{L}_][\p{L}\p{N}_]*)\}/gu)].map((match) => match[1]);
+    const mappedPathNames = entry.pathMappings.map((mapping) => mapping.sourceName);
+    for (const placeholder of placeholders) if (!mappedPathNames.includes(placeholder)) diagnostics.push(error(`请求路径缺少参数映射：${placeholder}`, entry.loc));
+    for (const source of mappedPathNames) if (!placeholders.includes(source)) diagnostics.push(error(`请求路径映射未出现在路由中：${source}`, entry.loc));
+
+    const possibleFailures = collectFlowFailures(flow, program, new Set());
+    const mappedFailures = new Set<string>();
+    for (const mapping of entry.failureMappings) {
+      if (mappedFailures.has(mapping.failureMessage)) diagnostics.push(error(`HTTP 失败重复映射：${mapping.failureMessage}`, mapping.loc));
+      mappedFailures.add(mapping.failureMessage);
+      if (!possibleFailures.has(mapping.failureMessage)) diagnostics.push(error(`HTTP 映射了流程不会产生的失败：${mapping.failureMessage}`, mapping.loc));
+    }
+    for (const failure of possibleFailures) if (!mappedFailures.has(failure)) diagnostics.push(error(`HTTP 入口缺少失败映射：${failure}`, entry.loc));
+  }
+}
+
+function collectFlowFailures(flow: FlowDeclaration, program: Program, visiting: Set<string>): Set<string> {
+  if (visiting.has(flow.name)) return new Set();
+  visiting.add(flow.name);
+  const failures = new Set<string>();
+  for (const statement of flow.statements) {
+    if (statement.kind === "if" || statement.kind === "create" || statement.kind === "query") failures.add(statement.failureMessage);
+    if (statement.kind === "execute") {
+      const called = program.flows.find((candidate) => candidate.name === statement.flowName);
+      if (called) for (const message of collectFlowFailures(called, program, visiting)) failures.add(message);
+    }
+  }
+  visiting.delete(flow.name);
+  return failures;
+}
+
+function requireIdentity(object: ObjectDeclaration | null, loc: { line: number; column: number }, diagnostics: Diagnostic[]): void {
+  if (object && object.identityFields.length === 0) diagnostics.push(error(`对象 ${object.name} 用于 CRUD 时必须声明身份`, loc));
+}
+
 
 function checkOutputs(fields: readonly OutputField[], environment: Environment, name: string, diagnostics: Diagnostic[]): RecordType {
   const names = new Set<string>();

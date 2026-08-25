@@ -26,14 +26,14 @@ Determinant 是 AAL（Auditable Application Language）的确定性应用编译�
 
 维护并验证 P0 最小闭环：
 
-1. 保持用户层只有对象和流程；
+1. 保持用户层只有对象、流程和 HTTP 入口；
 2. 保持字段关系使用“的”，状态变化使用“改变”；
 3. 保持 `执行 / 使用 / 得到` 的输入输出检查；
 4. 保持名称、字段、类型、金额单位和条件检查；
 5. 保持 Binding 可选；提供时必须完整覆盖对象、字段、流程、输入和输出；
 6. 保持 TypeScript 生成结果可复现；
 7. 用订单库存样例验证成功、失败和实际状态变化；
-8. 在 P0 语义稳定前，不扩张 HTTP、SQLite 或 UI。
+8. HTTP 只保持当前 CRUD MVP，不扩张 SQLite、TCP、WebSocket、鉴权或 UI。
 
 ## Rules For AI Assistants
 
@@ -55,6 +55,7 @@ npm test
 npm run compile:example
 npm run test:zh
 npm run compile:example:zh
+npm run demo:http
 ```
 
 生成的 TypeScript 还应通过严格类型检查，并验证订单库存样例的成功、库存不足、数量无效和库存对象变化。

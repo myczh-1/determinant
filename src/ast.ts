@@ -70,6 +70,7 @@ export interface Program {
   readonly name: string;
   readonly objects: readonly ObjectDeclaration[];
   readonly flows: readonly FlowDeclaration[];
+  readonly httpEntries: readonly HttpEntryDeclaration[];
   readonly loc: SourceLocation;
 }
 
@@ -77,6 +78,7 @@ export interface ObjectDeclaration {
   readonly kind: "object";
   readonly name: string;
   readonly fields: readonly TypeField[];
+  readonly identityFields: readonly string[];
   readonly loc: SourceLocation;
 }
 
@@ -96,7 +98,7 @@ export interface FlowInput {
   readonly loc: SourceLocation;
 }
 
-export type Statement = IfStatement | CalculateStatement | ChangeStatement | ExecuteStatement;
+export type Statement = IfStatement | CalculateStatement | ChangeStatement | ExecuteStatement | CreateStatement | QueryStatement | DeleteStatement;
 
 export interface IfStatement {
   readonly kind: "if";
@@ -124,6 +126,61 @@ export interface ExecuteStatement {
   readonly flowName: string;
   readonly inputs: readonly Expression[];
   readonly outputs: readonly string[];
+  readonly loc: SourceLocation;
+}
+
+export interface CreateStatement {
+  readonly kind: "create";
+  readonly name: string;
+  readonly objectName: string;
+  readonly assignments: readonly ObjectAssignment[];
+  readonly failureMessage: string;
+  readonly loc: SourceLocation;
+}
+
+export interface QueryStatement {
+  readonly kind: "query";
+  readonly name: string;
+  readonly objectName: string;
+  readonly condition: Expression;
+  readonly failureMessage: string;
+  readonly loc: SourceLocation;
+}
+
+export interface DeleteStatement {
+  readonly kind: "delete";
+  readonly expression: Expression;
+  readonly loc: SourceLocation;
+}
+
+export interface ObjectAssignment {
+  readonly target: Expression;
+  readonly expression: Expression;
+  readonly loc: SourceLocation;
+}
+
+export interface HttpFieldMapping {
+  readonly sourceName: string;
+  readonly targetName: string;
+  readonly loc: SourceLocation;
+}
+
+export interface HttpFailureMapping {
+  readonly failureMessage: string;
+  readonly status: number;
+  readonly loc: SourceLocation;
+}
+
+export interface HttpEntryDeclaration {
+  readonly kind: "http-entry";
+  readonly name: string;
+  readonly method: "GET" | "POST" | "PUT" | "DELETE";
+  readonly path: string;
+  readonly targetFlow: string;
+  readonly bodyMappings: readonly HttpFieldMapping[];
+  readonly pathMappings: readonly HttpFieldMapping[];
+  readonly successStatus: number;
+  readonly failureMappings: readonly HttpFailureMapping[];
   readonly loc: SourceLocation;
 }
 

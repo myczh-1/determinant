@@ -22,14 +22,14 @@ AI may assist from natural language to AAL. After the user confirms the AAL, par
 
 ## Current priority
 
-1. Keep only objects and flows at the user-facing top level.
+1. Keep only objects, flows, and HTTP entries at the user-facing top level.
 2. Keep possessive field relationships and explicit `change` statements.
 3. Check `execute / use / get` composition.
 4. Check names, fields, types, amount units, and conditions.
 5. Keep Binding optional; when present it must completely cover objects, fields, flows, inputs, and outputs.
 6. Keep English and `zh-CN` on the same AST, checker, and generator.
 7. Keep TypeScript generation reproducible and verify success, failure, and real state mutation.
-8. Do not expand into HTTP, SQLite, or UI before the P0 semantics are stable.
+8. Keep HTTP limited to the implemented CRUD MVP; do not expand into SQLite, TCP, WebSocket, authentication, or UI.
 
 ## Rules for AI assistants
 
@@ -51,6 +51,7 @@ npm test
 npm run compile:example
 npm run test:zh
 npm run compile:example:zh
+npm run demo:http
 ```
 
 Generated TypeScript must also pass strict type checking. The order and inventory example must verify success, insufficient inventory, invalid quantity, and mutation of the inventory object.

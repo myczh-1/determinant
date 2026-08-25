@@ -4,12 +4,13 @@
 
 Determinant is the deterministic compiler for AAL. AAL is a formal source language for application behavior, intended to let humans and AI review data, state, flows, and business decisions while implementation organization remains below the compiler boundary.
 
-The audit surface has two top-level structures:
+The audit surface has three top-level structures:
 
 - `object`: data and state in the business world;
 - `flow`: calculation, state change, composition, failure, and output.
+- `HTTP entry`: explicit request-to-flow mapping and status behavior.
 
-Binding is an optional, separate layer for names and structure. It maps audit names to stable IDs and program-facing names without changing business semantics. If omitted, the compiler creates a deterministic fallback for that build; durable identity across source renames or reordering requires an explicit Binding. If supplied, Binding is part of the reviewed build input.
+Binding is optional auxiliary input for names and stable identity. If omitted, audit names are used directly as program-facing names and the compiler creates deterministic temporary IDs for that build. Durable identity across source renames or reordering, or differing program names, requires an explicit Binding.
 
 ## Deterministic boundary
 
@@ -30,7 +31,8 @@ Application developers who can describe business rules and want review to focus 
 3. The parser reports positioned syntax diagnostics.
 4. The checker validates names, fields, types, composition, and explicit mutation.
 5. The compiler generates TypeScript/Node.js.
-6. Success and failure tests run; business changes are made in AAL.
+6. HTTP entries run the checked flows through the in-memory runtime.
+7. Success and failure tests run; business changes are made in AAL.
 
 ## P0 surface syntax
 
@@ -62,7 +64,7 @@ flow: DeductInventory
 
 P0 uses four-space indentation. Fields are declared directly under objects, possessive relationships replace implementation-style dot access, and `change` is the only P0 structure for real state mutation.
 
-Flows compose with `execute / use / get`. The last declared flow is the generated `run` entry in P0; a future multi-entry protocol must be explicit rather than inferred from names.
+Flows compose with `execute / use / get`. CRUD flows use explicit `identity`, `create`, `query`, `change`, and `delete` semantics. HTTP entries explicitly map request path/body fields, flow failures, and status codes. Host and port remain runtime configuration.
 
 English is the default dialect. Chinese sources select `zh-CN`; both dialects normalize into the same AST and use the same checker and generator.
 
@@ -75,6 +77,8 @@ English is the default dialect. Chinese sources select `zh-CN`; both dialects no
 5. Deterministic TypeScript/Node.js generation.
 6. Optional Binding with stable IDs and program names; explicit files require complete coverage.
 7. Reproducible order and inventory acceptance tests in English and Chinese.
+8. In-memory create, single-object query, update, and delete semantics.
+9. Executable GET, POST, PUT, and DELETE HTTP entries.
 
 ## P0 scope
 
@@ -86,12 +90,15 @@ Included:
 - arithmetic, comparison, conditions, failures, calculations, and explicit changes;
 - explicit flow composition;
 - optional name Binding;
+- explicit object identity and in-memory CRUD;
+- explicit HTTP request-to-flow entries;
 - TypeScript generation and execution.
 
 Excluded:
 
 - UI and visual design;
-- databases, ORM, HTTP, and distributed transactions;
+- databases, ORM, persistence, list queries, and distributed transactions;
+- authentication, CORS, PATCH, TCP, and WebSocket;
 - permissions, rollback, automatic retry, and implicit concurrency;
 - a graphical editor or complete IDE;
 - compiler or AI guesses for undeclared business rules;

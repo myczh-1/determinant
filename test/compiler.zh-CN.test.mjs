@@ -12,6 +12,7 @@ const source = readFileSync(new URL("../examples/order.zh-CN.aal", import.meta.u
 const bindingSource = readFileSync(new URL("../bindings/order.binding.zh-CN.json", import.meta.url), "utf8");
 const binding = parseBinding(bindingSource, language).spec;
 assert.ok(binding);
+const httpSource = readFileSync(new URL("../examples/items.zh-CN.aal", import.meta.url), "utf8");
 
 test("中文 AAL 使用同一套编译器完成解析和生成", () => {
   const result = compileAAL(source, { binding, language });
@@ -25,10 +26,26 @@ test("中文 AAL 使用同一套编译器完成解析和生成", () => {
   assert.ok(result.code?.includes('"orderId"'));
 });
 
-test("中文 Binding 可选并可使用确定性后备绑定", () => {
+test("中文 Binding 可选且默认直接使用审计名称", () => {
   const result = compileAAL(source, { language });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.map(formatDiagnostic).join("\n"));
-  assert.ok(result.code?.includes("function flow_2"));
+  assert.ok(result.code?.includes("function 创建订单"));
+});
+
+test("中文 AAL 可以运行同一套 HTTP CRUD 语义", () => {
+  const result = compileAAL(httpSource, { language });
+  assert.equal(result.diagnostics.length, 0, result.diagnostics.map(formatDiagnostic).join("\n"));
+  assert.ok(result.code);
+  const generated = compileGenerated(result.code);
+  generated.resetStore();
+  assert.deepEqual(generated.handleHttpRequest({ method: "POST", path: "/items", body: { id: 1, name: "书" } }), {
+    status: 201,
+    body: { 项目: { 编号: 1, 名称: "书" } },
+  });
+  assert.deepEqual(generated.handleHttpRequest({ method: "GET", path: "/items/1" }), {
+    status: 200,
+    body: { 项目: { 编号: 1, 名称: "书" } },
+  });
 });
 
 test("中文解析和生成保持确定性", () => {

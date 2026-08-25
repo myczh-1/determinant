@@ -28,9 +28,9 @@ The AAL source can continue to say `order's number`, while generated TypeScript 
 
 ## Optional does not mean unnecessary
 
-When no Binding file is provided, the compiler creates a deterministic fallback for the exact source declaration order in that build.
+When no Binding file is provided, the compiler uses each AAL audit name directly as its generated program name and creates deterministic temporary IDs from the source declaration order for that build. HTTP field names also default to the AAL flow input names and are not controlled by Binding.
 
-That fallback is useful for experiments, but it is not a durable identity contract. A source rename or declaration reorder can change generated IDs or program names.
+This direct mode is the normal way to start and run an application. It is not a durable identity contract: a source rename changes the program-facing name, and declaration reordering can change temporary IDs.
 
 Use an explicit Binding when:
 
@@ -39,6 +39,8 @@ Use an explicit Binding when:
 - English audit names and code names differ;
 - Chinese or another human-language dialect maps to English code names;
 - a Binding change must be reviewed separately from business behavior.
+
+Do not add a Binding merely because an application uses English names. If the audit names are already suitable program names and durable IDs are unnecessary, the direct mode is complete.
 
 ## English and Chinese
 
@@ -112,7 +114,7 @@ When an explicit Binding is supplied, the compiler requires exact coverage:
 - object `programName` values are unique among objects, flow `programName` values are unique among flows, and both are valid JavaScript identifiers;
 - member `programName` values are non-empty and unique within their object, input list, or output list.
 
-`auditName` is used to match the Binding to the selected AAL source. `id` preserves identity across deliberate audit-name changes. `programName` controls the generated interface.
+`auditName` is used to match the Binding to the selected AAL source. `id` preserves identity across deliberate audit-name changes. `programName` controls generated TypeScript names. It does not silently rename HTTP request or response fields; HTTP request differences are declared locally in the AAL HTTP entry with `as`.
 
 ## Audit boundary
 
@@ -158,7 +160,7 @@ Generated TypeScript records a deterministic Binding fingerprint. A reproducible
 
 ```text
 AAL source and semantics
-Binding, including the explicit file or generated fallback
+Binding, when an explicit Binding is used
 compiler version
 runtime and dependency versions
 future standard library, Adapter, and protocol configuration
@@ -185,7 +187,7 @@ node bin/determinant.mjs \
   --out generated/order.ts
 ```
 
-Omit `--binding` only when the per-build fallback is acceptable.
+Omit `--binding` when AAL names can be used directly and durable identities are not required.
 
 Generated TypeScript is an artifact. Change AAL to change business behavior; change Binding to change stable identities or program-facing names.
 

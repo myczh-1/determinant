@@ -27,7 +27,7 @@ Both dialects enter the same AST, checker, Binding resolver, and code generator.
 ## Rules for AI-generated AAL
 
 1. Output AAL, not TypeScript, JavaScript, or pseudocode presented as AAL.
-2. Use only `object` and `flow` as top-level declarations after the application header.
+2. Use only `object`, `flow`, and `HTTP entry` as top-level declarations after the application header.
 3. Use possessive field relationships such as `inventory's quantity`; do not use dot access, brackets, `this`, methods, or calls.
 4. Do not invent fields, types, currencies, units, precision, permissions, retries, concurrency, rollback, rounding, or failure behavior.
 5. Give every object field and flow input an explicit type.
@@ -58,7 +58,7 @@ flow: ReadInventory
 
 Use four spaces for each indentation level. Blank lines and lines beginning with `#` are ignored.
 
-English keywords are lowercase and case-sensitive. Names must start with a letter or underscore and then contain only letters, numbers, or underscores. Spaces are not allowed in names, so use `DeductInventory`, not `Deduct Inventory`.
+English keywords are lowercase and case-sensitive, except the literal header `HTTP entry`. Application, object, flow, field, and input names must start with a letter or underscore and then contain only letters, numbers, or underscores. An HTTP entry's review label may contain spaces, such as `HTTP entry: Deduct Inventory`.
 
 ## Objects and fields
 
@@ -82,6 +82,20 @@ order's customer's name
 ```
 
 Dot access such as `order.number` is rejected.
+
+An object used by CRUD declares its identity explicitly:
+
+```aal
+object: Item
+
+    id: integer
+    name: text
+
+    identity:
+        id
+```
+
+The MVP does not generate IDs. Creating another object with the same identity fails, and identity fields cannot be changed after creation.
 
 ## Types
 
@@ -177,6 +191,73 @@ execute:
 
 `use` entries follow the declared input order of the executed flow. `get` names follow its declared output order. Input count, output count, and types are checked before code generation.
 
+## Create, query, change, and delete
+
+CRUD behavior remains inside flows:
+
+```aal
+flow: UpdateItem
+
+    input:
+        id: integer
+        name: text
+
+    query:
+        item: Item
+
+        where:
+            item's id == id
+
+        otherwise:
+            failure: Item not found
+
+    change:
+        item's name = name
+
+    output:
+        item
+```
+
+`create` must assign every field and declare its duplicate-identity failure. `query` returns one object and declares its not-found failure. `delete` removes a previously created or queried object. The current runtime stores objects in memory only.
+
+See [examples/items.aal](../../examples/items.aal) for complete create, read, update, and delete flows.
+
+## HTTP entries
+
+An HTTP entry maps request data to one flow:
+
+```aal
+HTTP entry: Update Item
+
+    receive:
+        PUT /items/{id}
+
+    use flow:
+        UpdateItem
+
+    request path:
+        id
+
+    request body:
+        name
+
+    success:
+        return 200
+
+    if Item not found:
+        return 404
+```
+
+Every flow input must be mapped exactly once. The default HTTP field name equals the AAL input name. A local difference is explicit:
+
+```aal
+request body:
+    item_id as id
+    display_name as name
+```
+
+The MVP fixes these transport rules: invalid JSON, missing inputs, and wrong input types return `400`; unmatched routes return `404`; declared flow failures use their mapped status; unhandled runtime errors return `500`; and a successful `204` response has no body. Host and port are supplied at runtime and never appear in AAL.
+
 ## Expressions and operators
 
 The parser recognizes:
@@ -198,9 +279,9 @@ Integer `/` currently follows generated TypeScript numeric division. Its long-te
 
 ## Binding
 
-AAL uses audit names. An optional [Binding file](./binding-guide.md) can preserve the audit field `number` under `Order` as a stable ID while emitting the program field `id`.
+AAL uses audit names directly by default. An optional [Binding file](./binding-guide.md) can preserve the audit field `number` under `Order` as a stable ID while emitting the program field `id`.
 
-Without a Binding file, the compiler creates a deterministic fallback for that build. Use an explicit Binding when IDs or program-facing names must survive source renames or declaration reordering.
+Without a Binding file, audit names are also program-facing names and the compiler creates deterministic temporary IDs for that build. Use an explicit Binding only when names must differ or identities must survive source renames or declaration reordering.
 
 Binding is a separate build input. It must not add hidden business rules.
 
@@ -214,27 +295,34 @@ npm run compile:example
 
 The current P0 compiler uses the last declared flow as the generated `run` entry. A future multi-entry protocol must be explicit rather than inferred from names.
 
+Run the HTTP CRUD example with:
+
+```bash
+npm run demo:http
+```
+
 ## Current P0 limits
 
 P0 does not yet provide:
 
-- multiple explicit external entry points;
 - text or Boolean literals;
 - custom amount precision;
-- HTTP, CRUD, persistence, or transactions;
+- persistence, transactions, automatic IDs, list queries, or filters;
 - third-party API, SDK, or database adapters;
-- retries, concurrency, permissions, or rollback semantics.
+- PATCH, CORS, authentication, retries, concurrency, permissions, or rollback semantics.
 
 Do not simulate these capabilities with hidden conventions.
 
 ## Review checklist
 
 - [ ] Does the file start with one application header?
-- [ ] Are the remaining top-level declarations only objects and flows?
+- [ ] Are the remaining top-level declarations only objects, flows, and HTTP entries?
 - [ ] Does every object field and flow input have a type?
 - [ ] Does every amount declare CNY or USD, and is every non-standard unit confirmed?
 - [ ] Does every field relationship use the possessive form instead of dot access?
 - [ ] Are all state changes explicit under `change`?
 - [ ] Are all flow compositions explicit under `execute / use / get`?
 - [ ] Are all failure conditions and messages explicit?
+- [ ] Does every CRUD object declare its identity?
+- [ ] Does every HTTP entry map all flow inputs and failures explicitly?
 - [ ] Did the AI avoid inventing business decisions?

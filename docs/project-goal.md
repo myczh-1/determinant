@@ -29,11 +29,11 @@ deterministic TypeScript
 Node.js execution
 ```
 
-The end-to-end acceptance example creates an order, calculates its total, and deducts inventory. Inventory deduction must explicitly mutate inventory state.
+The acceptance examples cover order/inventory behavior and a runnable in-memory HTTP CRUD service whose behavior is fully declared in AAL.
 
 ## Language boundary
 
-The user-facing language describes only objects and flows. It exposes explicit fields, inputs, conditions, calculations, changes, execution, results, outputs, and failures. Currency, unit, precision, and failure behavior are business semantics and cannot be inferred.
+The user-facing language describes objects, flows, and explicit HTTP entries. It exposes fields, identity, inputs, CRUD actions, conditions, calculations, changes, execution, results, outputs, failures, request mappings, and status behavior. Host and port remain outside AAL.
 
 English is the default surface dialect and Chinese uses `zh-CN`. Both enter the same AST, checker, and generator. Optional Binding separates audit names from stable IDs and program names in either language.
 
@@ -41,7 +41,7 @@ English is the default surface dialect and Chinese uses `zh-CN`. Both enter the 
 
 - Replacing TypeScript, Python, Go, or other general-purpose languages.
 - Supporting UI and visual interaction in P0.
-- Covering databases, HTTP, distributed systems, and all concurrency semantics at once.
+- Covering databases, persistence, distributed systems, and all concurrency semantics at once.
 - Letting AI participate in the confirmed deterministic compiler path.
 - Filling in permissions, retries, rollback, rounding, or other decisions by default.
 
@@ -52,3 +52,4 @@ English is the default surface dialect and Chinese uses `zh-CN`. Both enter the 
 - Undefined names, type conflicts, illegal field access, and unclear mutations are rejected.
 - English and Chinese examples express equivalent stable identities.
 - The order example covers success, insufficient inventory, invalid quantity, and state mutation.
+- The CRUD example covers real HTTP create, read, update, delete, input failures, and deterministic generation without Binding.

@@ -28,16 +28,19 @@ AI 可以负责生成和修改 AAL。
 
 ## AAL
 
-AAL 当前只保留两个主要概念：
+AAL 当前保留两个主要业务概念和一个明确的外部入口：
 
 ```text
 Object（对象）
 Flow（流程）
+HTTP entry（HTTP 入口）
 ```
 
 对象描述应用中存在什么。
 
 流程描述应用中会发生什么。
+
+HTTP 入口把 HTTP 请求映射到流程。Host 和 Port 属于运行配置，不属于业务行为，因此不会写入 AAL。
 
 例如，默认英文方言可以写成：
 
@@ -116,7 +119,7 @@ Determinant 并不消灭 AI 编码的不确定性。
 
 AAL 使用人类可读的审计名称，而生成程序和外部系统可能使用不同名称。
 
-Binding（绑定）负责明确连接这些身份。
+当这些名称需要不同时，Binding（绑定）可以明确连接这些身份。
 
 例如：
 
@@ -130,11 +133,11 @@ Binding（绑定）负责明确连接这些身份。
 程序字段：id
 ```
 
-Binding 在实验中是可选的。
+Binding 是可选辅助输入，不是理解或运行 AAL 应用的前置条件。
 
-未提供显式 Binding 时，Determinant 可以为当前构建生成确定性的临时 Binding。
+没有显式 Binding 时，审计名称直接作为生成程序名称，声明在当前构建中使用确定性的临时 ID。HTTP 请求字段默认也使用 AAL 输入名称，除非 HTTP 入口通过局部 `as` 映射明确指定不同名称。
 
-对于持续维护的应用，如果稳定身份或程序名称需要在源文件重命名或声明顺序变化后保持不变，应使用显式 Binding。
+名称需要不同、稳定身份需要跨重命名或声明顺序变化保持不变，或必须维持已有程序接口时，再使用显式 Binding。
 
 Binding 不属于日常业务逻辑。业务行为主要在 AAL 中审计；当 Binding 新增或发生变化时，单独审计它的差异。
 
@@ -149,7 +152,10 @@ Binding 不属于日常业务逻辑。业务行为主要在 AAL 中审计；当 
 - 条件判断与明确失败
 - 计算
 - 显式状态改变
+- 对象身份、创建、单对象查询与删除
 - 流程组合
+- 明确的 HTTP 入口与请求映射
+- 内存 CRUD 运行时
 - 确定性解析
 - 语义检查与诊断
 - 显式金额类型
@@ -164,7 +170,7 @@ Binding 不属于日常业务逻辑。业务行为主要在 AAL 中审计；当 
 Node.js + TypeScript
 ```
 
-HTTP 与 CRUD 支持留待后续迭代。
+持久化、事务、鉴权、列表查询和外部系统适配不属于当前 MVP。
 
 ## 运行
 
@@ -183,6 +189,34 @@ npm run compile:example:zh
 
 # 全部测试
 npm run test:all
+
+# 运行内存 HTTP CRUD 演示
+npm run demo:http
+
+# 中文 AAL HTTP 演示
+npm run demo:http:zh
+```
+
+演示启动后可以执行：
+
+```bash
+curl -X POST http://127.0.0.1:3000/items \
+  -H "Content-Type: application/json" \
+  -d '{"id":1,"name":"Book"}'
+
+curl http://127.0.0.1:3000/items/1
+
+curl -X PUT http://127.0.0.1:3000/items/1 \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Notebook"}'
+
+curl -X DELETE http://127.0.0.1:3000/items/1
+```
+
+等价的直接启动命令是：
+
+```bash
+node bin/determinant.mjs run examples/items.aal --host 127.0.0.1 --port 3000
 ```
 
 默认 AAL 方言为英文，无语言后缀的文件使用英文。

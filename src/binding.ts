@@ -126,7 +126,7 @@ export function createIdentityBinding(program: Program): BindingSpec {
     objects: program.objects.map((object, objectIndex) => ({
       id: `object_${objectIndex}`,
       auditName: object.name,
-      programName: `Object_${objectIndex}`,
+      programName: object.name,
       fields: object.fields.map((field, fieldIndex) => ({
         id: `field_${objectIndex}_${fieldIndex}`,
         auditName: field.name,
@@ -136,7 +136,7 @@ export function createIdentityBinding(program: Program): BindingSpec {
     flows: program.flows.map((flow, flowIndex) => ({
       id: `flow_${flowIndex}`,
       auditName: flow.name,
-      programName: `flow_${flowIndex}`,
+      programName: flow.name,
       inputs: flow.inputs.map((input, inputIndex) => ({
         id: `input_${flowIndex}_${inputIndex}`,
         auditName: input.name,
@@ -274,7 +274,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isJavaScriptIdentifier(value: string): boolean {
-  return /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(value) && !JAVA_SCRIPT_RESERVED_WORDS.has(value);
+  return /^[$_\p{ID_Start}][$\u200C\u200D_\p{ID_Continue}]*$/u.test(value) && !JAVA_SCRIPT_RESERVED_WORDS.has(value);
 }
 
 const JAVA_SCRIPT_RESERVED_WORDS = new Set([

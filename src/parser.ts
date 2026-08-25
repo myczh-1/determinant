@@ -5,14 +5,19 @@ import {
   type BinaryExpression,
   type CalculateStatement,
   type ChangeStatement,
+  type CreateStatement,
+  type DeleteStatement,
   type ExecuteStatement,
   type Expression,
   type FlowDeclaration,
   type FlowInput,
   type IfStatement,
+  type HttpEntryDeclaration,
+  type HttpFieldMapping,
   type ObjectDeclaration,
   type OutputField,
   type Program,
+  type QueryStatement,
   type SourceLocation,
   type Statement,
   type TypeField,
@@ -174,6 +179,7 @@ function parseCanonicalAAL(source: string): ParseResult {
 
   const objects: ObjectDeclaration[] = [];
   const flows: FlowDeclaration[] = [];
+  const httpEntries: HttpEntryDeclaration[] = [];
   let index = lines.indexOf(first) + 1;
   while (index < lines.length) {
     const line = lines[index];
@@ -198,13 +204,19 @@ function parseCanonicalAAL(source: string): ParseResult {
       index = parsed.nextIndex;
       continue;
     }
+    if (line.content.startsWith("HTTP 入口：")) {
+      const parsed = parseHttpEntry(lines, index, diagnostics);
+      if (parsed.entry) httpEntries.push(parsed.entry);
+      index = parsed.nextIndex;
+      continue;
+    }
     diagnostics.push(error(`无法识别的顶层声明：${line.content}`, location(line.number, 1)));
     index += 1;
   }
   if (objects.length === 0) diagnostics.push(error("程序必须至少声明一个对象", location(first.number, 1)));
   if (flows.length === 0) diagnostics.push(error("程序必须至少声明一个流程", location(first.number, 1)));
   return {
-    program: { kind: "program", name: applicationName, objects, flows, loc: location(first.number, 1) },
+    program: { kind: "program", name: applicationName, objects, flows, httpEntries, loc: location(first.number, 1) },
     diagnostics,
   };
 }
@@ -216,9 +228,42 @@ function parseObject(lines: SourceLine[], start: number, diagnostics: Diagnostic
     diagnostics.push(error("对象名称必须是标识符", location(header.number, 4)));
     return { object: null, nextIndex: start + 1 };
   }
-  const parsed = parseTypedBlock(lines, start + 1, 4, "对象字段", diagnostics);
-  if (parsed.fields.length === 0) diagnostics.push(error("对象至少需要一个字段", location(header.number, 1)));
-  return { object: { kind: "object", name, fields: parsed.fields, loc: location(header.number, 1) }, nextIndex: parsed.nextIndex };
+  const fields: TypeField[] = [];
+  const identityFields: string[] = [];
+  let index = start + 1;
+  while (index < lines.length) {
+    const line = lines[index];
+    if (isIgnorable(line)) { index += 1; continue; }
+    if (line.indent === 0) break;
+    if (line.indent !== 4) {
+      diagnostics.push(error("对象成员必须缩进 4 个空格", lineLocation(line)));
+      index += 1;
+      continue;
+    }
+    if (line.content === "身份：") {
+      const parsed = parseNameList(lines, index + 1, 8, "身份", diagnostics);
+      for (const item of parsed.items) {
+        if (!isIdentifier(item.text)) diagnostics.push(error("身份字段必须是标识符", location(item.line, item.column)));
+        else identityFields.push(item.text);
+      }
+      index = parsed.nextIndex;
+      continue;
+    }
+    const separator = line.content.indexOf("：");
+    if (separator < 1) {
+      diagnostics.push(error("对象字段格式应为“名称：类型”", lineLocation(line)));
+      index += 1;
+      continue;
+    }
+    const fieldName = line.content.slice(0, separator).trim();
+    const typeText = line.content.slice(separator + 1).trim();
+    const type = parseType(typeText, line, line.text.indexOf(typeText) + 1, diagnostics);
+    if (!isIdentifier(fieldName)) diagnostics.push(error("对象字段名称必须是标识符", lineLocation(line)));
+    else if (type) fields.push({ name: fieldName, type, loc: lineLocation(line) });
+    index += 1;
+  }
+  if (fields.length === 0) diagnostics.push(error("对象至少需要一个字段", location(header.number, 1)));
+  return { object: { kind: "object", name, fields, identityFields, loc: location(header.number, 1) }, nextIndex: index };
 }
 
 function parseFlow(lines: SourceLine[], start: number, diagnostics: Diagnostic[]): { flow: FlowDeclaration | null; nextIndex: number } {
@@ -272,6 +317,24 @@ function parseFlow(lines: SourceLine[], start: number, diagnostics: Diagnostic[]
     }
     if (line.content === "执行：") {
       const parsed = parseExecute(lines, index + 1, diagnostics);
+      if (parsed.statement) statements.push(parsed.statement);
+      index = parsed.nextIndex;
+      continue;
+    }
+    if (line.content === "创建：") {
+      const parsed = parseCreate(lines, index + 1, diagnostics);
+      if (parsed.statement) statements.push(parsed.statement);
+      index = parsed.nextIndex;
+      continue;
+    }
+    if (line.content === "查询：") {
+      const parsed = parseQuery(lines, index + 1, diagnostics);
+      if (parsed.statement) statements.push(parsed.statement);
+      index = parsed.nextIndex;
+      continue;
+    }
+    if (line.content === "删除：") {
+      const parsed = parseDelete(lines, index + 1, diagnostics);
       if (parsed.statement) statements.push(parsed.statement);
       index = parsed.nextIndex;
       continue;
@@ -391,6 +454,215 @@ function parseExecute(lines: SourceLine[], start: number, diagnostics: Diagnosti
   if (inputs.length === 0) diagnostics.push(error("执行必须包含使用内容", lineLocation(flowLine)));
   if (outputs.length === 0) diagnostics.push(error("执行必须包含得到内容", lineLocation(flowLine)));
   return { statement: { kind: "execute", flowName, inputs, outputs, loc: lineLocation(flowLine) }, nextIndex: index };
+}
+
+function parseCreate(lines: SourceLine[], start: number, diagnostics: Diagnostic[]): { statement: CreateStatement | null; nextIndex: number } {
+  const declaration = nextMeaningfulLine(lines, start);
+  if (!declaration || declaration.indent !== 8) {
+    diagnostics.push(error("创建必须先声明“名称：对象类型”", location(declaration?.number ?? 1, 1)));
+    return { statement: null, nextIndex: start };
+  }
+  const declared = parseNamedObject(declaration, "创建", diagnostics);
+  let index = lines.indexOf(declaration) + 1;
+  const assignments: { target: Expression; expression: Expression; loc: SourceLocation }[] = [];
+  let failureMessage = "";
+  while (index < lines.length) {
+    const line = lines[index];
+    if (isIgnorable(line)) { index += 1; continue; }
+    if (line.indent < 8) break;
+    if (line.indent !== 8) {
+      diagnostics.push(error("创建内容必须缩进 8 个空格", lineLocation(line)));
+      index += 1;
+      continue;
+    }
+    if (line.content === "包含：") {
+      const parsed = parseAssignments(lines, index + 1, 12, "创建的包含内容", diagnostics);
+      assignments.push(...parsed.assignments.map(({ target, expression, loc }) => ({ target, expression, loc })));
+      index = parsed.nextIndex;
+      continue;
+    }
+    if (line.content === "否则：") {
+      const parsed = parseFailureLine(lines, index + 1, 12, diagnostics);
+      failureMessage = parsed.message;
+      index = parsed.nextIndex;
+      continue;
+    }
+    diagnostics.push(error(`无法识别的创建内容：${line.content}`, lineLocation(line)));
+    index += 1;
+  }
+  if (assignments.length === 0) diagnostics.push(error("创建必须包含字段赋值", lineLocation(declaration)));
+  if (!failureMessage) diagnostics.push(error("创建必须包含否则失败", lineLocation(declaration)));
+  return {
+    statement: declared ? { kind: "create", ...declared, assignments, failureMessage, loc: lineLocation(declaration) } : null,
+    nextIndex: index,
+  };
+}
+
+function parseQuery(lines: SourceLine[], start: number, diagnostics: Diagnostic[]): { statement: QueryStatement | null; nextIndex: number } {
+  const declaration = nextMeaningfulLine(lines, start);
+  if (!declaration || declaration.indent !== 8) {
+    diagnostics.push(error("查询必须先声明“名称：对象类型”", location(declaration?.number ?? 1, 1)));
+    return { statement: null, nextIndex: start };
+  }
+  const declared = parseNamedObject(declaration, "查询", diagnostics);
+  let index = lines.indexOf(declaration) + 1;
+  let condition: Expression | null = null;
+  let failureMessage = "";
+  while (index < lines.length) {
+    const line = lines[index];
+    if (isIgnorable(line)) { index += 1; continue; }
+    if (line.indent < 8) break;
+    if (line.indent !== 8) {
+      diagnostics.push(error("查询内容必须缩进 8 个空格", lineLocation(line)));
+      index += 1;
+      continue;
+    }
+    if (line.content === "条件：") {
+      const parsed = parseNameList(lines, index + 1, 12, "查询条件", diagnostics);
+      if (parsed.items.length !== 1) diagnostics.push(error("MVP 查询必须且只能包含一个条件", lineLocation(line)));
+      const item = parsed.items[0];
+      if (item) condition = parseExpression(item.text, item.line, item.column, diagnostics);
+      index = parsed.nextIndex;
+      continue;
+    }
+    if (line.content === "否则：") {
+      const parsed = parseFailureLine(lines, index + 1, 12, diagnostics);
+      failureMessage = parsed.message;
+      index = parsed.nextIndex;
+      continue;
+    }
+    diagnostics.push(error(`无法识别的查询内容：${line.content}`, lineLocation(line)));
+    index += 1;
+  }
+  if (!condition) diagnostics.push(error("查询必须包含条件", lineLocation(declaration)));
+  if (!failureMessage) diagnostics.push(error("查询必须包含否则失败", lineLocation(declaration)));
+  return {
+    statement: declared && condition ? { kind: "query", ...declared, condition, failureMessage, loc: lineLocation(declaration) } : null,
+    nextIndex: index,
+  };
+}
+
+function parseDelete(lines: SourceLine[], start: number, diagnostics: Diagnostic[]): { statement: DeleteStatement | null; nextIndex: number } {
+  const parsed = parseNameList(lines, start, 8, "删除", diagnostics);
+  if (parsed.items.length !== 1) diagnostics.push(error("MVP 删除必须且只能指定一个对象", location(lines[start - 1]?.number ?? 1, 1)));
+  const item = parsed.items[0];
+  const expression = item ? parseExpression(item.text, item.line, item.column, diagnostics) : null;
+  return { statement: expression ? { kind: "delete", expression, loc: expression.loc } : null, nextIndex: parsed.nextIndex };
+}
+
+function parseNamedObject(line: SourceLine, label: string, diagnostics: Diagnostic[]): { name: string; objectName: string } | null {
+  const separator = line.content.indexOf("：");
+  const name = separator > 0 ? line.content.slice(0, separator).trim() : "";
+  const objectName = separator > 0 ? line.content.slice(separator + 1).trim() : "";
+  if (!isIdentifier(name) || !isIdentifier(objectName)) {
+    diagnostics.push(error(`${label}格式应为“名称：对象类型”`, lineLocation(line)));
+    return null;
+  }
+  return { name, objectName };
+}
+
+function parseFailureLine(lines: SourceLine[], start: number, expectedIndent: number, diagnostics: Diagnostic[]): { message: string; nextIndex: number } {
+  const line = nextMeaningfulLine(lines, start);
+  if (!line || line.indent !== expectedIndent || !line.content.startsWith("失败：")) {
+    diagnostics.push(error(`否则必须包含缩进 ${expectedIndent} 个空格的“失败：消息”`, location(line?.number ?? 1, 1)));
+    return { message: "", nextIndex: start };
+  }
+  const message = line.content.slice("失败：".length).trim();
+  if (!message) diagnostics.push(error("失败消息不能为空", lineLocation(line)));
+  return { message, nextIndex: lines.indexOf(line) + 1 };
+}
+
+function parseHttpEntry(lines: SourceLine[], start: number, diagnostics: Diagnostic[]): { entry: HttpEntryDeclaration | null; nextIndex: number } {
+  const header = lines[start];
+  const name = header.content.slice("HTTP 入口：".length).trim();
+  if (!name) diagnostics.push(error("HTTP 入口名称不能为空", lineLocation(header)));
+  let method: HttpEntryDeclaration["method"] | null = null;
+  let path = "";
+  let targetFlow = "";
+  let successStatus = 0;
+  const bodyMappings: HttpFieldMapping[] = [];
+  const pathMappings: HttpFieldMapping[] = [];
+  const failureMappings: { failureMessage: string; status: number; loc: SourceLocation }[] = [];
+  let index = start + 1;
+  while (index < lines.length) {
+    const line = lines[index];
+    if (isIgnorable(line)) { index += 1; continue; }
+    if (line.indent === 0) break;
+    if (line.indent !== 4) {
+      diagnostics.push(error("HTTP 入口成员必须缩进 4 个空格", lineLocation(line)));
+      index += 1;
+      continue;
+    }
+    if (line.content === "接收：") {
+      const item = nextMeaningfulLine(lines, index + 1);
+      const match = item?.indent === 8 ? /^(GET|POST|PUT|DELETE)\s+(\/\S*)$/u.exec(item.content) : null;
+      if (!match) diagnostics.push(error("接收格式应为“GET /path”", lineLocation(line)));
+      else { method = match[1] as HttpEntryDeclaration["method"]; path = match[2]; }
+      index = item ? lines.indexOf(item) + 1 : index + 1;
+      continue;
+    }
+    if (line.content === "使用流程：") {
+      const item = nextMeaningfulLine(lines, index + 1);
+      if (!item || item.indent !== 8 || !isIdentifier(item.content)) diagnostics.push(error("使用流程必须指定流程名称", lineLocation(line)));
+      else targetFlow = item.content;
+      index = item ? lines.indexOf(item) + 1 : index + 1;
+      continue;
+    }
+    if (line.content === "请求体：" || line.content === "请求路径：") {
+      const parsed = parseNameList(lines, index + 1, 8, line.content === "请求体：" ? "请求体" : "请求路径", diagnostics);
+      const target = line.content === "请求体：" ? bodyMappings : pathMappings;
+      for (const item of parsed.items) {
+        const mapping = parseHttpMapping(item.text, item.line, item.column, diagnostics);
+        if (mapping) target.push(mapping);
+      }
+      index = parsed.nextIndex;
+      continue;
+    }
+    if (line.content === "成功：") {
+      const parsed = parseReturnStatus(lines, index + 1, diagnostics);
+      successStatus = parsed.status;
+      index = parsed.nextIndex;
+      continue;
+    }
+    if (line.content.startsWith("如果 ") && line.content.endsWith("：")) {
+      const failureMessage = line.content.slice(3, -1).trim();
+      const parsed = parseReturnStatus(lines, index + 1, diagnostics);
+      if (failureMessage) failureMappings.push({ failureMessage, status: parsed.status, loc: lineLocation(line) });
+      else diagnostics.push(error("HTTP 失败消息不能为空", lineLocation(line)));
+      index = parsed.nextIndex;
+      continue;
+    }
+    diagnostics.push(error(`无法识别的 HTTP 入口内容：${line.content}`, lineLocation(line)));
+    index += 1;
+  }
+  if (!method || !path) diagnostics.push(error("HTTP 入口必须包含接收", lineLocation(header)));
+  if (!targetFlow) diagnostics.push(error("HTTP 入口必须包含使用流程", lineLocation(header)));
+  if (!successStatus) diagnostics.push(error("HTTP 入口必须包含成功状态", lineLocation(header)));
+  return {
+    entry: name && method && path && targetFlow && successStatus
+      ? { kind: "http-entry", name, method, path, targetFlow, bodyMappings, pathMappings, successStatus, failureMappings, loc: lineLocation(header) }
+      : null,
+    nextIndex: index,
+  };
+}
+
+function parseHttpMapping(text: string, line: number, column: number, diagnostics: Diagnostic[]): HttpFieldMapping | null {
+  const parts = text.split(/\s+作为\s+/u);
+  if (parts.length > 2 || !isIdentifier(parts[0]) || (parts[1] !== undefined && !isIdentifier(parts[1]))) {
+    diagnostics.push(error("HTTP 字段格式应为“字段”或“外部字段 as 输入字段”", location(line, column)));
+    return null;
+  }
+  return { sourceName: parts[0], targetName: parts[1] ?? parts[0], loc: location(line, column) };
+}
+
+function parseReturnStatus(lines: SourceLine[], start: number, diagnostics: Diagnostic[]): { status: number; nextIndex: number } {
+  const line = nextMeaningfulLine(lines, start);
+  const match = line?.indent === 8 ? /^返回\s+(\d{3})$/u.exec(line.content) : null;
+  if (!match) {
+    diagnostics.push(error("HTTP 状态格式应为缩进 8 个空格的“return 200”", location(line?.number ?? 1, 1)));
+    return { status: 0, nextIndex: start };
+  }
+  return { status: Number(match[1]), nextIndex: lines.indexOf(line!) + 1 };
 }
 
 function parseOutputs(lines: SourceLine[], start: number, diagnostics: Diagnostic[]): { outputs: OutputField[]; nextIndex: number } {
