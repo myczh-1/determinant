@@ -2,11 +2,11 @@
 
 > Chinese version: [AAL 编写指南](./aal-authoring-guide.zh-CN.md)
 
-## What AAL is
+## Purpose
 
-AAL (Auditable Application Language) is a formal application language intended for human review and deterministic execution.
+AAL (Auditable Application Language) is a formal, human-readable language for application behavior.
 
-AAL describes:
+It describes:
 
 - data and state in the business world;
 - calculations and conditions;
@@ -14,63 +14,78 @@ AAL describes:
 - composition of business flows;
 - successful outputs and explicit failures.
 
-The confirmed AAL source is processed by a deterministic parser, semantic checker, and TypeScript/Node.js backend. The compiler does not ask an AI to infer missing business decisions.
+After a user confirms the AAL, a deterministic parser, semantic checker, and TypeScript generator process it without asking an LLM to infer missing decisions.
+
+## Dialects
+
+English is the default dialect. Files without a language suffix use English.
+
+Chinese files use the `.zh-CN.aal` suffix and are compiled with `--language zh-CN`.
+
+Both dialects enter the same AST, checker, Binding resolver, and code generator. They are two human-facing surfaces over one core semantic model.
 
 ## Rules for AI-generated AAL
 
-1. Output AAL only. Do not output TypeScript, JavaScript, or pseudocode as AAL.
-2. The user-facing language has only two top-level structures: `object` and `flow`.
-3. Use possessive relationships for fields, for example `inventory's quantity`. Do not use dot access, brackets, `this`, or other implementation syntax.
-4. Do not invent currencies, units, precision, fields, permissions, retries, concurrency, rollback, rounding, or error behavior.
-5. Declare a type for every object field and flow input.
-6. Use `change` for real state changes. A calculation alone does not mutate an object.
+1. Output AAL, not TypeScript, JavaScript, or pseudocode presented as AAL.
+2. Use only `object` and `flow` as top-level declarations after the application header.
+3. Use possessive field relationships such as `inventory's quantity`; do not use dot access, brackets, `this`, methods, or calls.
+4. Do not invent fields, types, currencies, units, precision, permissions, retries, concurrency, rollback, rounding, or failure behavior.
+5. Give every object field and flow input an explicit type.
+6. Use `change` for real state mutation. A calculation alone does not change an object.
 7. Compose flows explicitly with `execute`, `use`, and `get`.
-8. Ask the user when a requirement is ambiguous.
-9. After the user confirms AAL, stop changing its business meaning. Deterministic tooling owns parsing, checking, and compilation.
+8. Ask the user when the business requirement is ambiguous.
+9. Stop changing business meaning after the user confirms the AAL.
 
-## File structure
+## Source file structure
 
-An AAL file starts with an application name. Top-level declarations are objects and flows:
+Every file starts with one application header. P0 then requires at least one object and one flow:
 
 ```aal
-application: OrderInventory
+application: InventoryApp
 
 object: Inventory
 
     quantity: integer
 
-flow: CheckInventory
+flow: ReadInventory
 
     input:
         inventory: Inventory
-        quantity: integer
 
     output:
-        remainingInventory = inventory's quantity
+        quantity = inventory's quantity
 ```
 
 Use four spaces for each indentation level. Blank lines and lines beginning with `#` are ignored.
 
+English keywords are lowercase and case-sensitive. Names must start with a letter or underscore and then contain only letters, numbers, or underscores. Spaces are not allowed in names, so use `DeductInventory`, not `Deduct Inventory`.
+
 ## Objects and fields
 
-Objects describe data and state. Fields are written directly under an object:
+Objects describe data and state. They do not contain flows:
 
 ```aal
 object: Order
 
     number: integer
+
+object: Inventory
+
+    quantity: integer
 ```
 
-Field relationships use the possessive form:
+Use the possessive form to read nested fields:
 
 ```text
 order's number
 order's customer's name
 ```
 
+Dot access such as `order.number` is rejected.
+
 ## Types
 
-P0 supports:
+P0 supports these declarations:
 
 ```text
 integer
@@ -78,20 +93,31 @@ text
 boolean
 CNY amount
 USD amount
-object name
+the name of a declared object
 ```
 
-An amount can specify its unit:
+For example, `Inventory` is an object type after `object: Inventory` has been declared. The literal text `object name` is not a type keyword.
+
+The built-in amount types currently have fixed standard representations:
+
+```text
+CNY amount = currency CNY, unit yuan, scale 2
+USD amount = currency USD, unit dollar, scale 2
+```
+
+A unit label can be written explicitly:
 
 ```aal
 unitPrice: CNY amount, unit yuan
 ```
 
-Currency, unit, and precision are business semantics. Do not write a generic `amount` and expect the compiler to guess its meaning.
+P0 still fixes the scale at two decimal places. Custom precision is not supported. A non-standard unit must come from a confirmed business requirement; neither AI nor the compiler should invent one.
+
+P0 expressions have integer literals only. Text and Boolean values may be declared as fields or inputs, but text and Boolean literal syntax is not implemented yet.
 
 ## Flows
 
-Flows describe business steps:
+Flows describe what happens:
 
 ```aal
 flow: DeductInventory
@@ -113,18 +139,29 @@ flow: DeductInventory
         remainingInventory = inventory's quantity
 ```
 
-`if` must produce a Boolean condition. `failure` is an explicit flow failure. `change` is the only P0 form that represents a real object state mutation.
+Every flow must have an `output` section. An `if` condition must be Boolean and its next indented meaningful line must contain the explicit `failure` message. A failed executed flow propagates the same failure to its containing flow.
 
-## Calculations and flow composition
+## Calculations and state changes
 
-Name calculation results:
+Calculations name a derived value without mutating state:
 
 ```aal
 calculate:
     total = unitPrice * quantity
 ```
 
-Compose another flow explicitly:
+Only `change` represents a real object mutation:
+
+```aal
+change:
+    inventory's quantity = inventory's quantity - quantity
+```
+
+The target of `change` must be an object field. Inputs, calculations, and flow outputs cannot be mutated directly.
+
+## Flow composition
+
+Call another business flow explicitly:
 
 ```aal
 execute:
@@ -138,27 +175,66 @@ execute:
         total
 ```
 
-`use` follows the declared input order. `get` follows the declared output order. A failed executed flow propagates the same failure to the containing flow.
+`use` entries follow the declared input order of the executed flow. `get` names follow its declared output order. Input count, output count, and types are checked before code generation.
+
+## Expressions and operators
+
+The parser recognizes:
+
+```text
++  -  *  /  %  >  >=  <  <=  ==  !=  (  )
+```
+
+`=` assigns a calculation, change, or named output. Equality comparison uses `==`.
+
+P0 type checking allows:
+
+- integer arithmetic;
+- addition and subtraction of amounts with identical currency, unit, and scale;
+- multiplication of an amount by an integer in either order;
+- comparison of compatible values.
+
+Integer `/` currently follows generated TypeScript numeric division. Its long-term rounding semantics have not been formalized, so do not use it where a fractional result is possible without a separately confirmed rule.
 
 ## Binding
 
-The AAL surface uses audit names. An optional [Binding file](./binding-guide.md) maps those names to stable IDs and program-facing names such as `Inventory → InventoryRecord` and `number → id`.
+AAL uses audit names. An optional [Binding file](./binding-guide.md) can preserve the audit field `number` under `Order` as a stable ID while emitting the program field `id`.
 
-Without a Binding file, the compiler creates a deterministic fallback for that build. An explicit Binding is still valuable in English when audit names, stable identities, and program-facing names differ, and is required when IDs must survive source renames or reordering. Binding is a separate build input and must not add hidden business rules.
+Without a Binding file, the compiler creates a deterministic fallback for that build. Use an explicit Binding when IDs or program-facing names must survive source renames or declaration reordering.
 
-## Complete example
+Binding is a separate build input. It must not add hidden business rules.
 
-The repository example is [examples/order.aal](../../examples/order.aal). It contains two objects and three flows: total calculation, inventory deduction, and order creation.
+## Complete example and compilation
 
-The current P0 compiler treats the last declared flow as the generated `run` entry. An explicit multi-entry protocol layer is intentionally left for a later design.
+The complete English example is [examples/order.aal](../../examples/order.aal). It contains two objects and three flows: total calculation, inventory deduction, and order creation.
+
+```bash
+npm run compile:example
+```
+
+The current P0 compiler uses the last declared flow as the generated `run` entry. A future multi-entry protocol must be explicit rather than inferred from names.
+
+## Current P0 limits
+
+P0 does not yet provide:
+
+- multiple explicit external entry points;
+- text or Boolean literals;
+- custom amount precision;
+- HTTP, CRUD, persistence, or transactions;
+- third-party API, SDK, or database adapters;
+- retries, concurrency, permissions, or rollback semantics.
+
+Do not simulate these capabilities with hidden conventions.
 
 ## Review checklist
 
-- [ ] Are all top-level declarations objects or flows?
+- [ ] Does the file start with one application header?
+- [ ] Are the remaining top-level declarations only objects and flows?
 - [ ] Does every object field and flow input have a type?
-- [ ] Are currency and unit explicit for every amount?
-- [ ] Does every field relationship use the possessive form (`inventory's quantity`)?
-- [ ] Are all real state changes explicit under `change`?
+- [ ] Does every amount declare CNY or USD, and is every non-standard unit confirmed?
+- [ ] Does every field relationship use the possessive form instead of dot access?
+- [ ] Are all state changes explicit under `change`?
 - [ ] Are all flow compositions explicit under `execute / use / get`?
 - [ ] Are all failure conditions and messages explicit?
 - [ ] Did the AI avoid inventing business decisions?

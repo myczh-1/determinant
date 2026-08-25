@@ -4,70 +4,196 @@
 
 ## Purpose
 
-Binding is an optional, explicit layer between AAL audit names, stable identities, and program-world names.
+Binding is the optional, explicit layer among:
 
 ```text
-AAL: Inventory's number
-Binding: Inventory → InventoryRecord, number → quantity
-Generated code: InventoryRecord.quantity
+human-readable audit name
+stable internal ID
+program-facing name
 ```
 
-AAL does not need to know the naming conventions of TypeScript, an SDK, or a database. The compiler does not guess whether two names refer to the same thing.
+For example:
+
+```text
+Audit object: Order
+Stable ID: object_order
+Program object: Order
+
+Audit field: number
+Stable ID: field_order_number
+Program field: id
+```
+
+The AAL source can continue to say `order's number`, while generated TypeScript exposes the field as `order.id`. The compiler does not guess that these names refer to the same field.
+
+## Optional does not mean unnecessary
+
+When no Binding file is provided, the compiler creates a deterministic fallback for the exact source declaration order in that build.
+
+That fallback is useful for experiments, but it is not a durable identity contract. A source rename or declaration reorder can change generated IDs or program names.
+
+Use an explicit Binding when:
+
+- IDs must remain stable across audit-name changes;
+- generated TypeScript names form a maintained interface;
+- English audit names and code names differ;
+- Chinese or another human-language dialect maps to English code names;
+- a Binding change must be reviewed separately from business behavior.
+
+## English and Chinese
+
+Binding is not only a translation layer.
+
+The English and Chinese examples use separate files because their `auditName` values differ. They intentionally reuse the same IDs and program-facing names:
+
+```text
+English audit name: number
+Chinese audit name: 编号
+Stable ID: field_order_number
+Program name: id
+```
+
+This lets the two human-facing dialects refer to the same program-world identity without forcing their audit names to match.
 
 ## File format
 
-P0 uses JSON binding files under `bindings/`. The example is:
+P0 uses JSON Binding files. The complete examples are:
 
-```text
-bindings/order.binding.json
-```
+- [bindings/order.binding.json](../../bindings/order.binding.json)
+- [bindings/order.binding.zh-CN.json](../../bindings/order.binding.zh-CN.json)
 
-Each binding entry contains:
+A Binding file contains `version: 1`, an `objects` array, and a `flows` array.
+
+Every object binds its fields. Every flow binds its inputs and outputs. Each entry contains:
 
 - `id`: a stable internal identity;
-- `auditName`: the name used in AAL;
-- `programName`: the name used by generated code.
+- `auditName`: the exact declaration name used by the selected AAL dialect;
+- `programName`: the name emitted in generated TypeScript.
 
-Objects bind their fields. Flows bind their inputs and outputs.
+An object entry from the English example looks like this:
 
 ```json
 {
-  "version": 1,
-  "objects": [
+  "id": "object_order",
+  "auditName": "Order",
+  "programName": "Order",
+  "fields": [
     {
-      "id": "object_inventory",
-      "auditName": "Inventory",
-      "programName": "InventoryRecord",
-      "fields": [
-        {
-          "id": "field_inventory_quantity",
-          "auditName": "number",
-          "programName": "quantity"
-        }
-      ]
+      "id": "field_order_number",
+      "auditName": "number",
+      "programName": "id"
     }
-  ],
-  "flows": []
+  ]
 }
 ```
 
-When provided, the binding must cover every object, field, flow, input, and output in the AAL source. Missing or extra entries are compilation errors. When omitted, the compiler creates a deterministic fallback for that build. That fallback is not a durable identity contract across source renames or declaration reordering.
+A flow entry has the same three identity fields plus `inputs` and `outputs`:
+
+```json
+{
+  "id": "flow_create_order",
+  "auditName": "CreateOrder",
+  "programName": "createOrder",
+  "inputs": [],
+  "outputs": []
+}
+```
+
+The empty arrays above illustrate structure only. A real Binding must list every input and output declared by that flow; see the complete example file.
+
+## Validation rules
+
+When an explicit Binding is supplied, the compiler requires exact coverage:
+
+- every AAL object and flow has one Binding entry;
+- every object field, flow input, and flow output has one member entry;
+- missing, extra, or duplicate audit names are rejected;
+- every `id` is globally unique and matches `[a-z][a-z0-9_-]*`;
+- object `programName` values are unique among objects, flow `programName` values are unique among flows, and both are valid JavaScript identifiers;
+- member `programName` values are non-empty and unique within their object, input list, or output list.
+
+`auditName` is used to match the Binding to the selected AAL source. `id` preserves identity across deliberate audit-name changes. `programName` controls the generated interface.
 
 ## Audit boundary
 
-Normal business review focuses on AAL. A Binding file must be reviewed when it is created or changed because it changes generated names and external structure.
+Routine business review focuses on AAL.
 
-Binding may describe names and structural relationships. It must not silently add business rules. Amount conversion, enum conversion, object reshaping, and third-party behavior belong to a later Adapter layer.
+A Binding must be reviewed when it is created or changed because it can change generated names and interface structure without changing the AAL business text.
 
-The generated file records a deterministic Binding fingerprint. A build identity should account for the AAL/AST, Binding, compiler, standard library, adapters, and runtime configuration.
+For example, changing:
+
+```text
+number → id
+```
+
+to:
+
+```text
+number → customerId
+```
+
+changes the generated program interface even if the AAL source is unchanged.
+
+## What Binding may contain
+
+P0 Binding may contain only identities and names for:
+
+- objects and fields;
+- flows, inputs, and outputs.
+
+It must not add:
+
+- amount or unit conversion;
+- enum or status conversion;
+- object reshaping;
+- third-party API behavior;
+- database behavior;
+- hidden business rules.
+
+Those capabilities require a future explicit Adapter or protocol layer. Current P0 Binding controls generated TypeScript names only.
+
+## Build identity
+
+Generated TypeScript records a deterministic Binding fingerprint. A reproducible build should account for:
+
+```text
+AAL source and semantics
+Binding, including the explicit file or generated fallback
+compiler version
+runtime and dependency versions
+future standard library, Adapter, and protocol configuration
+```
+
+The current short fingerprint is for deterministic traceability, not a cryptographic security guarantee.
 
 ## Compile
 
+With the explicit English Binding:
+
 ```bash
+npm run compile:example
+```
+
+Direct CLI usage:
+
+```bash
+npm run build
+
 node bin/determinant.mjs \
   examples/order.aal \
   --binding bindings/order.binding.json \
   --out generated/order.ts
 ```
 
-Generated TypeScript is an artifact. Change AAL to change business semantics; change Binding to change program-facing names.
+Omit `--binding` only when the per-build fallback is acceptable.
+
+Generated TypeScript is an artifact. Change AAL to change business behavior; change Binding to change stable identities or program-facing names.
+
+## Review checklist
+
+- [ ] Does every `auditName` exactly match the selected AAL dialect?
+- [ ] Does the file cover every object, field, flow, input, and output exactly once?
+- [ ] Are stable IDs preserved for declarations that retain the same identity?
+- [ ] Are program-facing name changes intentional?
+- [ ] Does the Binding contain names and identities only?
+- [ ] Is the Binding diff reviewed whenever it changes?
