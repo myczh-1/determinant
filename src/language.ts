@@ -26,6 +26,7 @@ export function runtimeMessages(language: AALLanguage): {
   moneyRequired: string;
   moneyMismatch: string;
   incompatibleMoney: string;
+  invalidTime: string;
   integerRequired: string;
   objectRequired: string;
   invalidRequest: string;
@@ -38,6 +39,7 @@ export function runtimeMessages(language: AALLanguage): {
         moneyRequired: "必须是金额",
         moneyMismatch: "的币种、单位或精度不匹配",
         incompatibleMoney: "金额的币种、单位或精度不匹配",
+        invalidTime: "时间格式无效",
         integerRequired: "必须是整数",
         objectRequired: "必须是对象",
         invalidRequest: "请求输入无效",
@@ -49,6 +51,7 @@ export function runtimeMessages(language: AALLanguage): {
         moneyRequired: " must be an amount",
         moneyMismatch: " currency, unit, or precision does not match",
         incompatibleMoney: "Money currency, unit, or precision does not match",
+        invalidTime: "Invalid time",
         integerRequired: " must be an integer",
         objectRequired: " must be an object",
         invalidRequest: "Invalid request input",
@@ -89,6 +92,7 @@ function normalizeEnglishLine(text: string): string {
     "use flow:": "使用流程：",
     "request body:": "请求体：",
     "request path:": "请求路径：",
+    "system provided:": "系统提供：",
     "success:": "成功：",
   };
   if (sections[content]) return `${indent}${sections[content]}`;
@@ -100,6 +104,9 @@ function normalizeEnglishLine(text: string): string {
     return `${indent}失败：${content.slice("failure:".length).trim()}`;
   }
   if (content.startsWith("return ")) return `${indent}返回 ${content.slice("return ".length).trim()}`;
+  if (/^current time\s+as\s+[\p{L}_][\p{L}\p{N}_]*$/u.test(content)) {
+    return `${indent}当前时间 作为 ${content.slice(content.lastIndexOf(" as ") + 4).trim()}`;
+  }
   if (/^[\p{L}_][\p{L}\p{N}_]*\s+as\s+[\p{L}_][\p{L}\p{N}_]*$/u.test(content)) {
     return `${indent}${content.replace(/\s+as\s+/u, " 作为 ")}`;
   }
@@ -119,6 +126,8 @@ function translateEnglishType(type: string): string {
   if (type === "integer") return "整数";
   if (type === "text") return "文本";
   if (type === "boolean") return "布尔";
+  if (type === "time") return "时间";
+  if (type === "duration") return "持续时间";
   const money = /^(CNY|USD) amount(?:,\s*unit\s+(.+))?$/u.exec(type);
   if (!money) return type;
   const name = money[1] === "CNY" ? "人民币金额" : "美元金额";
@@ -129,6 +138,7 @@ function normalizeEnglishExpression(expression: string): string {
   return expression
     .replace(/(\d+\.\d{2})\s+CNY\b/gu, "$1 元")
     .replace(/(\d+\.\d{2})\s+USD\b/gu, "$1 美元")
+    .replace(/\b(\d+)\s+days?\b/gu, "$1 天")
     .replaceAll("'s ", " 的 ");
 }
 

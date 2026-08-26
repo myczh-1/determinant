@@ -25,6 +25,8 @@ export function generateTypeScript(program: Program, bindingInput?: BindingSpec 
     `// Binding fingerprint: ${bindingFingerprint(binding)}`,
     "",
     "export type Money = Readonly<{ kind: \"money\"; currency: string; unit: string; scale: number; minor: bigint }>;",
+    "export type Time = Readonly<{ kind: \"time\"; epochMilliseconds: number }>;",
+    "export type Duration = Readonly<{ kind: \"duration\"; milliseconds: number }>;",
     "export type FlowResult<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: string };",
     "",
     "export function money(currency: string, unit: string, scale: number, value: string | number): Money {",
@@ -104,6 +106,28 @@ export function generateTypeScript(program: Program, bindingInput?: BindingSpec 
     `  if (left.currency !== right.currency || left.unit !== right.unit || left.scale !== right.scale) throw new Error(${JSON.stringify(messages.incompatibleMoney)});`,
     "}",
     "",
+    "export function time(value: string | number | Date): Time {",
+    "  const epochMilliseconds = value instanceof Date ? value.getTime() : typeof value === \"number\" ? value : Date.parse(value);",
+    `  if (!Number.isSafeInteger(epochMilliseconds)) throw new Error(${JSON.stringify(messages.invalidTime)});`,
+    "  return { kind: \"time\", epochMilliseconds };",
+    "}",
+    "",
+    "export function timeValue(value: Time): string {",
+    "  return new Date(value.epochMilliseconds).toISOString();",
+    "}",
+    "",
+    "function duration(milliseconds: number): Duration {",
+    "  return { kind: \"duration\", milliseconds };",
+    "}",
+    "",
+    "function timeAdd(value: Time, durationValue: Duration): Time {",
+    "  return { kind: \"time\", epochMilliseconds: value.epochMilliseconds + durationValue.milliseconds };",
+    "}",
+    "",
+    "function timeCompare(left: Time, right: Time): number {",
+    "  return left.epochMilliseconds < right.epochMilliseconds ? -1 : left.epochMilliseconds > right.epochMilliseconds ? 1 : 0;",
+    "}",
+    "",
   ];
 
   for (const [name, objectType] of typeInfo.objectTypes) {
@@ -180,86 +204,93 @@ function generateFlow(
   }
 
   const lines = [`function ${functionName}(${params.join(", ")}): FlowResult<${outputAlias}> {`];
-  let calculationIndex = 0;
-  let executeIndex = 0;
-  let createIndex = 0;
-  let queryIndex = 0;
-  for (const statement of flow.statements) {
-    if (statement.kind === "calculate") {
-      const symbol = `calculation_${calculationIndex++}`;
-      lines.push(`  const ${symbol} = ${renderExpression(statement.expression, symbols, environment, binding)};`);
-      symbols.set(statement.name, symbol);
-      const type = inferExpressionType(statement.expression, environment);
-      if (type) environment.set(statement.name, type);
-      continue;
-    }
-    if (statement.kind === "if") {
-      lines.push(`  if (${renderExpression(statement.condition, symbols, environment, binding)}) return { ok: false, error: ${JSON.stringify(statement.failureMessage)} };`);
-      continue;
-    }
-    if (statement.kind === "change") {
-      lines.push(`  ${renderExpression(statement.target, symbols, environment, binding)} = ${renderExpression(statement.expression, symbols, environment, binding)};`);
-      continue;
-    }
-    if (statement.kind === "create") {
-      const object = program.objects.find((candidate) => candidate.name === statement.objectName)!;
-      const objectType = typeInfo.objectTypes.get(statement.objectName)!;
-      const objectBinding = binding.objects.get(statement.objectName)!;
-      const symbol = `created_${createIndex++}`;
-      lines.push(`  const ${symbol}: ${objectAliases.get(statement.objectName)!} = {`);
-      for (const field of object.fields) {
-        const assignment = statement.assignments.find((candidate) => candidate.target.kind === "member" && candidate.target.property === field.name)!;
-        lines.push(`    ${JSON.stringify(objectBinding.fields.get(field.name)!.programName)}: ${renderExpression(assignment.expression, symbols, environment, binding)},`);
+  const counters = { calculation: 0, execute: 0, create: 0, query: 0 };
+  const emitStatements = (statements: FlowDeclaration["statements"], localSymbols: Map<string, string>, localEnvironment: Environment, indent: string): string[] => {
+    const generated: string[] = [];
+    for (const statement of statements) {
+      if (statement.kind === "conditional") {
+        generated.push(`${indent}if (${renderExpression(statement.condition, localSymbols, localEnvironment, binding)}) {`);
+        generated.push(...emitStatements(statement.statements, new Map(localSymbols), new Map(localEnvironment), `${indent}  `));
+        generated.push(`${indent}}`);
+        continue;
       }
-      lines.push("  };");
-      const identity = renderIdentityKey(symbol, object, objectBinding);
-      const store = storeAliases.get(statement.objectName)!;
-      lines.push(`  const ${symbol}_key = ${identity};`);
-      lines.push(`  if (${store}.has(${symbol}_key)) return { ok: false, error: ${JSON.stringify(statement.failureMessage)} };`);
-      lines.push(`  ${store}.set(${symbol}_key, ${symbol});`);
-      symbols.set(statement.name, symbol);
-      environment.set(statement.name, objectType);
-      continue;
+      if (statement.kind === "calculate") {
+        const symbol = `calculation_${counters.calculation++}`;
+        generated.push(`${indent}const ${symbol} = ${renderExpression(statement.expression, localSymbols, localEnvironment, binding)};`);
+        localSymbols.set(statement.name, symbol);
+        const type = inferExpressionType(statement.expression, localEnvironment);
+        if (type) localEnvironment.set(statement.name, type);
+        continue;
+      }
+      if (statement.kind === "if") {
+        generated.push(`${indent}if (${renderExpression(statement.condition, localSymbols, localEnvironment, binding)}) return { ok: false, error: ${JSON.stringify(statement.failureMessage)} };`);
+        continue;
+      }
+      if (statement.kind === "change") {
+        generated.push(`${indent}${renderExpression(statement.target, localSymbols, localEnvironment, binding)} = ${renderExpression(statement.expression, localSymbols, localEnvironment, binding)};`);
+        continue;
+      }
+      if (statement.kind === "create") {
+        const object = program.objects.find((candidate) => candidate.name === statement.objectName)!;
+        const objectType = typeInfo.objectTypes.get(statement.objectName)!;
+        const objectBinding = binding.objects.get(statement.objectName)!;
+        const symbol = `created_${counters.create++}`;
+        generated.push(`${indent}const ${symbol}: ${objectAliases.get(statement.objectName)!} = {`);
+        for (const field of object.fields) {
+          const assignment = statement.assignments.find((candidate) => candidate.target.kind === "member" && candidate.target.property === field.name)!;
+          generated.push(`${indent}  ${JSON.stringify(objectBinding.fields.get(field.name)!.programName)}: ${renderExpression(assignment.expression, localSymbols, localEnvironment, binding)},`);
+        }
+        generated.push(`${indent}};`);
+        const identity = renderIdentityKey(symbol, object, objectBinding);
+        const store = storeAliases.get(statement.objectName)!;
+        generated.push(`${indent}const ${symbol}_key = ${identity};`);
+        generated.push(`${indent}if (${store}.has(${symbol}_key)) return { ok: false, error: ${JSON.stringify(statement.failureMessage)} };`);
+        generated.push(`${indent}${store}.set(${symbol}_key, ${symbol});`);
+        localSymbols.set(statement.name, symbol);
+        localEnvironment.set(statement.name, objectType);
+        continue;
+      }
+      if (statement.kind === "query") {
+        const object = program.objects.find((candidate) => candidate.name === statement.objectName)!;
+        const objectType = typeInfo.objectTypes.get(statement.objectName)!;
+        const candidateSymbol = `query_candidate_${counters.query}`;
+        const symbol = `query_${counters.query++}`;
+        const querySymbols = new Map(localSymbols);
+        const queryEnvironment = new Map(localEnvironment);
+        querySymbols.set(statement.name, candidateSymbol);
+        queryEnvironment.set(statement.name, objectType);
+        generated.push(`${indent}const ${symbol} = [...${storeAliases.get(object.name)!}.values()].find((${candidateSymbol}) => ${renderExpression(statement.condition, querySymbols, queryEnvironment, binding)});`);
+        generated.push(`${indent}if (!${symbol}) return { ok: false, error: ${JSON.stringify(statement.failureMessage)} };`);
+        localSymbols.set(statement.name, symbol);
+        localEnvironment.set(statement.name, objectType);
+        continue;
+      }
+      if (statement.kind === "delete") {
+        const objectType = inferExpressionType(statement.expression, localEnvironment)!;
+        const object = program.objects.find((candidate) => candidate.name === (objectType.kind === "object" ? objectType.name : ""))!;
+        const objectBinding = binding.objects.get(object.name)!;
+        const rendered = renderExpression(statement.expression, localSymbols, localEnvironment, binding);
+        generated.push(`${indent}${storeAliases.get(object.name)!}.delete(${renderIdentityKey(rendered, object, objectBinding)});`);
+        continue;
+      }
+      const callSymbol = `execute_${counters.execute++}`;
+      const called = typeInfo.flowSignatures.get(statement.flowName)!;
+      const calledFunction = flowAliases.get(flowKey(statement.flowName))!;
+      const argumentsCode = statement.inputs.map((input) => renderExpression(input, localSymbols, localEnvironment, binding));
+      generated.push(`${indent}const ${callSymbol} = ${calledFunction}(${argumentsCode.join(", ")});`);
+      generated.push(`${indent}if (${callSymbol}.ok === false) return { ok: false, error: ${callSymbol}.error };`);
+      for (let index = 0; index < Math.min(called.output.fields.length, statement.outputs.length); index += 1) {
+        const name = statement.outputs[index];
+        const field = called.output.fields[index];
+        const outputName = binding.flows.get(statement.flowName)!.outputs.get(field.name)!.programName;
+        const symbol = `${callSymbol}.value[${JSON.stringify(outputName)}]`;
+        localSymbols.set(name, symbol);
+        localEnvironment.set(name, field.type);
+      }
     }
-    if (statement.kind === "query") {
-      const object = program.objects.find((candidate) => candidate.name === statement.objectName)!;
-      const objectType = typeInfo.objectTypes.get(statement.objectName)!;
-      const candidateSymbol = `query_candidate_${queryIndex}`;
-      const symbol = `query_${queryIndex++}`;
-      const querySymbols = new Map(symbols);
-      const queryEnvironment = new Map(environment);
-      querySymbols.set(statement.name, candidateSymbol);
-      queryEnvironment.set(statement.name, objectType);
-      lines.push(`  const ${symbol} = [...${storeAliases.get(object.name)!}.values()].find((${candidateSymbol}) => ${renderExpression(statement.condition, querySymbols, queryEnvironment, binding)});`);
-      lines.push(`  if (!${symbol}) return { ok: false, error: ${JSON.stringify(statement.failureMessage)} };`);
-      symbols.set(statement.name, symbol);
-      environment.set(statement.name, objectType);
-      continue;
-    }
-    if (statement.kind === "delete") {
-      const objectType = inferExpressionType(statement.expression, environment)!;
-      const object = program.objects.find((candidate) => candidate.name === (objectType.kind === "object" ? objectType.name : ""))!;
-      const objectBinding = binding.objects.get(object.name)!;
-      const rendered = renderExpression(statement.expression, symbols, environment, binding);
-      lines.push(`  ${storeAliases.get(object.name)!}.delete(${renderIdentityKey(rendered, object, objectBinding)});`);
-      continue;
-    }
-    if (statement.kind !== "execute") continue;
-    const callSymbol = `execute_${executeIndex++}`;
-    const called = typeInfo.flowSignatures.get(statement.flowName)!;
-    const calledFunction = flowAliases.get(flowKey(statement.flowName))!;
-    const argumentsCode = statement.inputs.map((input) => renderExpression(input, symbols, environment, binding));
-    lines.push(`  const ${callSymbol} = ${calledFunction}(${argumentsCode.join(", ")});`);
-    lines.push(`  if (${callSymbol}.ok === false) return { ok: false, error: ${callSymbol}.error };`);
-    for (let index = 0; index < Math.min(called.output.fields.length, statement.outputs.length); index += 1) {
-      const name = statement.outputs[index];
-      const field = called.output.fields[index];
-      const outputName = binding.flows.get(statement.flowName)!.outputs.get(field.name)!.programName;
-      const symbol = `${callSymbol}.value[${JSON.stringify(outputName)}]`;
-      symbols.set(name, symbol);
-      environment.set(name, field.type);
-    }
-  }
+    return generated;
+  };
+  lines.push(...emitStatements(flow.statements, symbols, environment, "  "));
   lines.push("  return { ok: true, value: {");
   for (const field of flow.outputs) {
     const outputName = binding.flows.get(flow.name)!.outputs.get(field.name)!.programName;
@@ -312,8 +343,13 @@ function generateHttp(
   const lines: string[] = [
     "export interface HttpRequest { readonly method: string; readonly path: string; readonly body?: unknown; }",
     "export interface HttpResponse { readonly status: number; readonly body?: unknown; }",
+    "export interface HttpRuntimeContext { readonly now?: () => string | number | Date; }",
     "",
-    "export function handleHttpRequest(request: HttpRequest): HttpResponse {",
+    "function currentTime(context: HttpRuntimeContext): Time {",
+    "  return time(context.now ? context.now() : Date.now());",
+    "}",
+    "",
+    "export function handleHttpRequest(request: HttpRequest, context: HttpRuntimeContext = {}): HttpResponse {",
     "  const method = request.method.toUpperCase();",
     "  const pathname = request.path.split(\"?\", 1)[0] || \"/\";",
   ];
@@ -329,6 +365,11 @@ function generateHttp(
     }
     const parsedSymbols = new Map<string, string>();
     for (const [inputIndex, input] of signature.inputs.entries()) {
+      const systemMapping = entry.systemMappings.find((mapping) => mapping.targetName === input.name);
+      if (systemMapping) {
+        parsedSymbols.set(input.name, "currentTime(context)");
+        continue;
+      }
       const pathMapping = entry.pathMappings.find((mapping) => mapping.targetName === input.name);
       const bodyMapping = entry.bodyMappings.find((mapping) => mapping.targetName === input.name);
       const raw = pathMapping
@@ -388,6 +429,7 @@ function escapeRegExp(value: string): string {
 
 function serializeAuditValue(expression: string, type: TypeRef, binding: ResolvedBinding): string {
   if (type.kind === "money") return `moneyValue(${expression})`;
+  if (type.kind === "time") return `timeValue(${expression})`;
   if (type.kind === "object") {
     const objectBinding = binding.objects.get(type.name)!;
     const fields = type.fields.map((field) => {
@@ -411,6 +453,7 @@ function renderIdentityKey(
 function renderExpression(expression: Expression, symbols: ReadonlyMap<string, string>, environment: Environment, binding: ResolvedBinding): string {
   if (expression.kind === "integer-literal") return String(expression.value);
   if (expression.kind === "money-literal") return `money(${JSON.stringify(expression.currency)}, ${JSON.stringify(expression.unit)}, ${expression.scale}, ${JSON.stringify(expression.value)})`;
+  if (expression.kind === "duration-literal") return `duration(${expression.milliseconds})`;
   if (expression.kind === "reference") return symbols.get(expression.name) ?? "undefined";
   if (expression.kind === "member") {
     const containerType = inferExpressionType(expression.object, environment);
@@ -421,18 +464,26 @@ function renderExpression(expression: Expression, symbols: ReadonlyMap<string, s
         : undefined;
     return `${renderExpression(expression.object, symbols, environment, binding)}[${JSON.stringify(programName ?? expression.property)}]`;
   }
+  if (expression.kind === "unary") return `(!${renderExpression(expression.expression, symbols, environment, binding)})`;
 
   const left = renderExpression(expression.left, symbols, environment, binding);
   const right = renderExpression(expression.right, symbols, environment, binding);
   const leftType = inferExpressionType(expression.left, environment);
   const rightType = inferExpressionType(expression.right, environment);
+  if (expression.operator === "and") return `(${left} && ${right})`;
+  if (expression.operator === "or") return `(${left} || ${right})`;
   if (expression.operator === "+" && leftType?.kind === "money" && rightType?.kind === "money") return `moneyAdd(${left}, ${right})`;
   if (expression.operator === "-" && leftType?.kind === "money" && rightType?.kind === "money") return `moneySubtract(${left}, ${right})`;
   if (expression.operator === "*" && leftType?.kind === "money" && rightType?.kind === "integer") return `moneyMultiply(${left}, ${right})`;
   if (expression.operator === "*" && leftType?.kind === "integer" && rightType?.kind === "money") return `moneyMultiply(${right}, ${left})`;
+  if (expression.operator === "+" && leftType?.kind === "time" && rightType?.kind === "duration") return `timeAdd(${left}, ${right})`;
   if ([">", ">=", "<", "<=", "==", "!="].includes(expression.operator) && leftType?.kind === "money" && rightType?.kind === "money") {
     const comparison = ({ ">": ">", ">=": ">=", "<": "<", "<=": "<=", "==": "===", "!=": "!==" } as Record<string, string>)[expression.operator];
     return `moneyCompare(${left}, ${right}) ${comparison} 0`;
+  }
+  if ([">", ">=", "<", "<=", "==", "!="].includes(expression.operator) && leftType?.kind === "time" && rightType?.kind === "time") {
+    const comparison = ({ ">": ">", ">=": ">=", "<": "<", "<=": "<=", "==": "===", "!=": "!==" } as Record<string, string>)[expression.operator];
+    return `timeCompare(${left}, ${right}) ${comparison} 0`;
   }
   const operator = expression.operator === "==" ? "===" : expression.operator === "!=" ? "!==" : expression.operator;
   return `(${left} ${operator} ${right})`;
@@ -443,6 +494,8 @@ function typeScriptType(type: TypeRef, objectAliases: ReadonlyMap<string, string
   if (type.kind === "text") return "string";
   if (type.kind === "boolean") return "boolean";
   if (type.kind === "money") return "Money";
+  if (type.kind === "time") return "Time";
+  if (type.kind === "duration") return "Duration";
   if (type.kind === "value") return type.values.map((value) => JSON.stringify(value)).join(" | ") || "never";
   if (type.kind === "named") return "unknown";
   if (type.kind === "object") return objectAliases.get(type.name) ?? "Record<string, unknown>";

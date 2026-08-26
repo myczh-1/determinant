@@ -1,10 +1,13 @@
 import {
   BOOLEAN,
+  DURATION,
   INTEGER,
   TEXT,
+  TIME,
   type BinaryExpression,
   type CalculateStatement,
   type ChangeStatement,
+  type ConditionalStatement,
   type CreateStatement,
   type DeleteStatement,
   type ExecuteStatement,
@@ -14,6 +17,7 @@ import {
   type IfStatement,
   type HttpEntryDeclaration,
   type HttpFieldMapping,
+  type HttpSystemMapping,
   type MoneyLiteral,
   type ObjectDeclaration,
   type OutputField,
@@ -36,7 +40,7 @@ interface SourceLine {
 }
 
 interface Token {
-  readonly kind: "number" | "money" | "identifier" | "operator" | "left-paren" | "right-paren";
+  readonly kind: "number" | "money" | "duration" | "identifier" | "operator" | "left-paren" | "right-paren";
   readonly value: string;
   readonly column: number;
 }
@@ -54,13 +58,35 @@ class ExpressionParser {
       this.diagnostics.push(error("表达式不能为空", location(this.line, this.column)));
       return null;
     }
-    const expression = this.parseComparison();
+    const expression = this.parseOr();
     if (this.index < this.tokens.length) {
       const token = this.tokens[this.index];
       this.diagnostics.push(error(`表达式中出现无法识别的内容：${token.value}`, location(this.line, token.column)));
       return null;
     }
     return expression;
+  }
+
+  private parseOr(): Expression | null {
+    let left = this.parseAnd();
+    while (left && this.peek("operator", ["或者"])) {
+      this.consume();
+      const right = this.parseAnd();
+      if (!right) return null;
+      left = { kind: "binary", operator: "or", left, right, loc: location(this.line, this.column) };
+    }
+    return left;
+  }
+
+  private parseAnd(): Expression | null {
+    let left = this.parseComparison();
+    while (left && this.peek("operator", ["并且"])) {
+      this.consume();
+      const right = this.parseComparison();
+      if (!right) return null;
+      left = { kind: "binary", operator: "and", left, right, loc: location(this.line, this.column) };
+    }
+    return left;
   }
 
   private parseComparison(): Expression | null {
@@ -86,14 +112,24 @@ class ExpressionParser {
   }
 
   private parseMultiplicative(): Expression | null {
-    let left = this.parsePrimary();
+    let left = this.parseUnary();
     while (left && this.peek("operator", ["*", "/", "%"])) {
       const operator = this.consume().value as BinaryExpression["operator"];
-      const right = this.parsePrimary();
+      const right = this.parseUnary();
       if (!right) return null;
       left = { kind: "binary", operator, left, right, loc: location(this.line, this.column) };
     }
     return left;
+  }
+
+  private parseUnary(): Expression | null {
+    const token = this.tokens[this.index];
+    if (token?.kind === "operator" && token.value === "非") {
+      this.index += 1;
+      const expression = this.parseUnary();
+      return expression ? { kind: "unary", operator: "not", expression, loc: location(this.line, token.column) } : null;
+    }
+    return this.parsePrimary();
   }
 
   private parsePrimary(): Expression | null {
@@ -115,6 +151,10 @@ class ExpressionParser {
         scale: 2,
         loc: location(this.line, token.column),
       } satisfies MoneyLiteral;
+    } else if (token.kind === "duration") {
+      this.index += 1;
+      const days = Number.parseInt(token.value, 10);
+      expression = { kind: "duration-literal", milliseconds: days * 24 * 60 * 60 * 1000, loc: location(this.line, token.column) };
     } else if (token.kind === "number") {
       this.index += 1;
       expression = { kind: "integer-literal", value: Number(token.value), loc: location(this.line, token.column) };
@@ -123,7 +163,7 @@ class ExpressionParser {
       expression = { kind: "reference", name: token.value, loc: location(this.line, token.column) };
     } else if (token.kind === "left-paren") {
       this.index += 1;
-      const inner = this.parseComparison();
+      const inner = this.parseOr();
       if (!this.peek("right-paren", [")"])) {
         this.diagnostics.push(error("缺少右括号 )", location(this.line, token.column)));
         return null;
@@ -333,77 +373,94 @@ function parseFlow(lines: SourceLine[], start: number, diagnostics: Diagnostic[]
       index = parsed.nextIndex;
       continue;
     }
-    if (line.content.startsWith("如果 ") && line.content.endsWith("：")) {
-      const parsed = parseIf(lines, index, diagnostics);
-      if (parsed.statement) statements.push(parsed.statement);
-      index = parsed.nextIndex;
-      continue;
-    }
-    if (line.content === "计算：") {
-      const parsed = parseAssignments(lines, index + 1, 8, "计算", diagnostics);
-      statements.push(...parsed.assignments.map((assignment): CalculateStatement => ({ kind: "calculate", name: assignment.name, expression: assignment.expression, loc: assignment.loc })));
-      index = parsed.nextIndex;
-      continue;
-    }
-    if (line.content === "改变：") {
-      const parsed = parseAssignments(lines, index + 1, 8, "改变", diagnostics);
-      for (const assignment of parsed.assignments) {
-        statements.push({ kind: "change", target: assignment.target, expression: assignment.expression, loc: assignment.loc } as ChangeStatement);
-      }
-      index = parsed.nextIndex;
-      continue;
-    }
-    if (line.content === "执行：") {
-      const parsed = parseExecute(lines, index + 1, diagnostics);
-      if (parsed.statement) statements.push(parsed.statement);
-      index = parsed.nextIndex;
-      continue;
-    }
-    if (line.content === "创建：") {
-      const parsed = parseCreate(lines, index + 1, diagnostics);
-      if (parsed.statement) statements.push(parsed.statement);
-      index = parsed.nextIndex;
-      continue;
-    }
-    if (line.content === "查询：") {
-      const parsed = parseQuery(lines, index + 1, diagnostics);
-      if (parsed.statement) statements.push(parsed.statement);
-      index = parsed.nextIndex;
-      continue;
-    }
-    if (line.content === "删除：") {
-      const parsed = parseDelete(lines, index + 1, diagnostics);
-      if (parsed.statement) statements.push(parsed.statement);
-      index = parsed.nextIndex;
-      continue;
-    }
     if (line.content === "输出：") {
       const parsed = parseOutputs(lines, index + 1, diagnostics);
       outputs.push(...parsed.outputs);
       index = parsed.nextIndex;
       continue;
     }
-    diagnostics.push(error(`无法识别的流程语句：${line.content}`, lineLocation(line)));
-    index += 1;
+    const parsed = parseFlowStatement(lines, index, 4, diagnostics);
+    statements.push(...parsed.statements);
+    index = parsed.nextIndex;
   }
   if (outputs.length === 0) diagnostics.push(error("流程必须包含输出", lineLocation(header)));
   return { flow: { kind: "flow", name, inputs, statements, outputs, loc: lineLocation(header) }, nextIndex: index };
 }
 
-function parseIf(lines: SourceLine[], start: number, diagnostics: Diagnostic[]): { statement: IfStatement | null; nextIndex: number } {
+function parseFlowStatement(lines: SourceLine[], start: number, expectedIndent: number, diagnostics: Diagnostic[]): { statements: Statement[]; nextIndex: number } {
+  const line = lines[start];
+  if (!line || line.indent !== expectedIndent) {
+    diagnostics.push(error(`流程语句必须缩进 ${expectedIndent} 个空格`, location(line?.number ?? 1, (line?.indent ?? 0) + 1)));
+    return { statements: [], nextIndex: start + 1 };
+  }
+  if (line.content.startsWith("如果 ") && line.content.endsWith("：")) {
+    const parsed = parseIf(lines, start, diagnostics);
+    return { statements: parsed.statement ? [parsed.statement] : [], nextIndex: parsed.nextIndex };
+  }
+  if (line.content === "计算：" || line.content === "改变：") {
+    const parsed = parseAssignments(lines, start + 1, expectedIndent + 4, line.content === "计算：" ? "计算" : "改变", diagnostics);
+    const statements = line.content === "计算："
+      ? parsed.assignments.map((assignment): CalculateStatement => ({ kind: "calculate", name: assignment.name, expression: assignment.expression, loc: assignment.loc }))
+      : parsed.assignments.map((assignment): ChangeStatement => ({ kind: "change", target: assignment.target, expression: assignment.expression, loc: assignment.loc }));
+    return { statements, nextIndex: parsed.nextIndex };
+  }
+  if (line.content === "执行：") {
+    const parsed = parseExecute(lines, start + 1, expectedIndent + 4, diagnostics);
+    return { statements: parsed.statement ? [parsed.statement] : [], nextIndex: parsed.nextIndex };
+  }
+  if (line.content === "创建：") {
+    const parsed = parseCreate(lines, start + 1, expectedIndent + 4, diagnostics);
+    return { statements: parsed.statement ? [parsed.statement] : [], nextIndex: parsed.nextIndex };
+  }
+  if (line.content === "查询：") {
+    const parsed = parseQuery(lines, start + 1, expectedIndent + 4, diagnostics);
+    return { statements: parsed.statement ? [parsed.statement] : [], nextIndex: parsed.nextIndex };
+  }
+  if (line.content === "删除：") {
+    const parsed = parseDelete(lines, start + 1, expectedIndent + 4, diagnostics);
+    return { statements: parsed.statement ? [parsed.statement] : [], nextIndex: parsed.nextIndex };
+  }
+  diagnostics.push(error(`无法识别的流程语句：${line.content}`, lineLocation(line)));
+  return { statements: [], nextIndex: start + 1 };
+}
+
+function parseStatementBlock(lines: SourceLine[], start: number, expectedIndent: number, diagnostics: Diagnostic[]): { statements: Statement[]; nextIndex: number } {
+  const statements: Statement[] = [];
+  let index = start;
+  while (index < lines.length) {
+    const line = lines[index];
+    if (isIgnorable(line)) { index += 1; continue; }
+    if (line.indent < expectedIndent) break;
+    const parsed = parseFlowStatement(lines, index, expectedIndent, diagnostics);
+    statements.push(...parsed.statements);
+    index = parsed.nextIndex;
+  }
+  return { statements, nextIndex: index };
+}
+
+function parseIf(lines: SourceLine[], start: number, diagnostics: Diagnostic[]): { statement: IfStatement | ConditionalStatement | null; nextIndex: number } {
   const line = lines[start];
   const conditionText = line.content.slice(3, -1).trim();
   const condition = parseExpression(conditionText, line.number, line.text.indexOf(conditionText) + 1, diagnostics);
-  const failure = nextMeaningfulLine(lines, start + 1);
-  if (!failure || failure.indent !== 8 || !failure.content.startsWith("失败：")) {
-    diagnostics.push(error("如果语句必须包含缩进 8 个空格的“失败：消息”", lineLocation(line)));
+  const childIndent = line.indent + 4;
+  const child = nextMeaningfulLine(lines, start + 1);
+  if (!child || child.indent !== childIndent) {
+    diagnostics.push(error(`如果语句必须包含缩进 ${childIndent} 个空格的业务步骤`, lineLocation(line)));
     return { statement: null, nextIndex: start + 1 };
   }
-  const message = failure.content.slice("失败：".length).trim();
-  if (!message) diagnostics.push(error("失败消息不能为空", lineLocation(failure)));
+  if (child.content.startsWith("失败：")) {
+    const message = child.content.slice("失败：".length).trim();
+    if (!message) diagnostics.push(error("失败消息不能为空", lineLocation(child)));
+    return {
+      statement: condition ? { kind: "if", condition, failureMessage: message, loc: lineLocation(line) } : null,
+      nextIndex: lines.indexOf(child) + 1,
+    };
+  }
+  const block = parseStatementBlock(lines, lines.indexOf(child), childIndent, diagnostics);
+  if (block.statements.length === 0) diagnostics.push(error("条件业务步骤不能为空", lineLocation(line)));
   return {
-    statement: condition ? { kind: "if", condition, failureMessage: message, loc: lineLocation(line) } : null,
-    nextIndex: lines.indexOf(failure) + 1,
+    statement: condition ? { kind: "conditional", condition, statements: block.statements, loc: lineLocation(line) } : null,
+    nextIndex: block.nextIndex,
   };
 }
 
@@ -444,11 +501,11 @@ function parseAssignments(lines: SourceLine[], start: number, expectedIndent: nu
   return { assignments, nextIndex: index };
 }
 
-function parseExecute(lines: SourceLine[], start: number, diagnostics: Diagnostic[]): { statement: ExecuteStatement | null; nextIndex: number } {
+function parseExecute(lines: SourceLine[], start: number, expectedIndent: number, diagnostics: Diagnostic[]): { statement: ExecuteStatement | null; nextIndex: number } {
   let index = start;
   while (index < lines.length && isIgnorable(lines[index])) index += 1;
   const flowLine = lines[index];
-  if (!flowLine || flowLine.indent !== 8 || !isIdentifier(flowLine.content)) {
+  if (!flowLine || flowLine.indent !== expectedIndent || !isIdentifier(flowLine.content)) {
     diagnostics.push(error("执行必须先指定一个流程名称", location(flowLine?.number ?? 1, 1)));
     return { statement: null, nextIndex: start };
   }
@@ -462,14 +519,14 @@ function parseExecute(lines: SourceLine[], start: number, diagnostics: Diagnosti
       index += 1;
       continue;
     }
-    if (line.indent < 8) break;
-    if (line.indent !== 8) {
-      diagnostics.push(error("执行内容必须缩进 8 个空格", lineLocation(line)));
+    if (line.indent < expectedIndent) break;
+    if (line.indent !== expectedIndent) {
+      diagnostics.push(error(`执行内容必须缩进 ${expectedIndent} 个空格`, lineLocation(line)));
       index += 1;
       continue;
     }
     if (line.content === "使用：") {
-      const parsed = parseNameList(lines, index + 1, 12, "使用", diagnostics);
+      const parsed = parseNameList(lines, index + 1, expectedIndent + 4, "使用", diagnostics);
       for (const item of parsed.items) {
         const expression = parseExpression(item.text, item.line, item.column, diagnostics);
         if (expression) inputs.push(expression);
@@ -478,7 +535,7 @@ function parseExecute(lines: SourceLine[], start: number, diagnostics: Diagnosti
       continue;
     }
     if (line.content === "得到：") {
-      const parsed = parseNameList(lines, index + 1, 12, "得到", diagnostics);
+      const parsed = parseNameList(lines, index + 1, expectedIndent + 4, "得到", diagnostics);
       for (const item of parsed.items) {
         if (!isIdentifier(item.text)) diagnostics.push(error("得到的名称必须是标识符", location(item.line, item.column)));
         else outputs.push(item.text);
@@ -494,9 +551,9 @@ function parseExecute(lines: SourceLine[], start: number, diagnostics: Diagnosti
   return { statement: { kind: "execute", flowName, inputs, outputs, loc: lineLocation(flowLine) }, nextIndex: index };
 }
 
-function parseCreate(lines: SourceLine[], start: number, diagnostics: Diagnostic[]): { statement: CreateStatement | null; nextIndex: number } {
+function parseCreate(lines: SourceLine[], start: number, expectedIndent: number, diagnostics: Diagnostic[]): { statement: CreateStatement | null; nextIndex: number } {
   const declaration = nextMeaningfulLine(lines, start);
-  if (!declaration || declaration.indent !== 8) {
+  if (!declaration || declaration.indent !== expectedIndent) {
     diagnostics.push(error("创建必须先声明“名称：对象类型”", location(declaration?.number ?? 1, 1)));
     return { statement: null, nextIndex: start };
   }
@@ -507,20 +564,20 @@ function parseCreate(lines: SourceLine[], start: number, diagnostics: Diagnostic
   while (index < lines.length) {
     const line = lines[index];
     if (isIgnorable(line)) { index += 1; continue; }
-    if (line.indent < 8) break;
-    if (line.indent !== 8) {
-      diagnostics.push(error("创建内容必须缩进 8 个空格", lineLocation(line)));
+    if (line.indent < expectedIndent) break;
+    if (line.indent !== expectedIndent) {
+      diagnostics.push(error(`创建内容必须缩进 ${expectedIndent} 个空格`, lineLocation(line)));
       index += 1;
       continue;
     }
     if (line.content === "包含：") {
-      const parsed = parseAssignments(lines, index + 1, 12, "创建的包含内容", diagnostics);
+      const parsed = parseAssignments(lines, index + 1, expectedIndent + 4, "创建的包含内容", diagnostics);
       assignments.push(...parsed.assignments.map(({ target, expression, loc }) => ({ target, expression, loc })));
       index = parsed.nextIndex;
       continue;
     }
     if (line.content === "否则：") {
-      const parsed = parseFailureLine(lines, index + 1, 12, diagnostics);
+      const parsed = parseFailureLine(lines, index + 1, expectedIndent + 4, diagnostics);
       failureMessage = parsed.message;
       index = parsed.nextIndex;
       continue;
@@ -536,9 +593,9 @@ function parseCreate(lines: SourceLine[], start: number, diagnostics: Diagnostic
   };
 }
 
-function parseQuery(lines: SourceLine[], start: number, diagnostics: Diagnostic[]): { statement: QueryStatement | null; nextIndex: number } {
+function parseQuery(lines: SourceLine[], start: number, expectedIndent: number, diagnostics: Diagnostic[]): { statement: QueryStatement | null; nextIndex: number } {
   const declaration = nextMeaningfulLine(lines, start);
-  if (!declaration || declaration.indent !== 8) {
+  if (!declaration || declaration.indent !== expectedIndent) {
     diagnostics.push(error("查询必须先声明“名称：对象类型”", location(declaration?.number ?? 1, 1)));
     return { statement: null, nextIndex: start };
   }
@@ -549,14 +606,14 @@ function parseQuery(lines: SourceLine[], start: number, diagnostics: Diagnostic[
   while (index < lines.length) {
     const line = lines[index];
     if (isIgnorable(line)) { index += 1; continue; }
-    if (line.indent < 8) break;
-    if (line.indent !== 8) {
-      diagnostics.push(error("查询内容必须缩进 8 个空格", lineLocation(line)));
+    if (line.indent < expectedIndent) break;
+    if (line.indent !== expectedIndent) {
+      diagnostics.push(error(`查询内容必须缩进 ${expectedIndent} 个空格`, lineLocation(line)));
       index += 1;
       continue;
     }
     if (line.content === "条件：") {
-      const parsed = parseNameList(lines, index + 1, 12, "查询条件", diagnostics);
+      const parsed = parseNameList(lines, index + 1, expectedIndent + 4, "查询条件", diagnostics);
       if (parsed.items.length !== 1) diagnostics.push(error("MVP 查询必须且只能包含一个条件", lineLocation(line)));
       const item = parsed.items[0];
       if (item) condition = parseExpression(item.text, item.line, item.column, diagnostics);
@@ -564,7 +621,7 @@ function parseQuery(lines: SourceLine[], start: number, diagnostics: Diagnostic[
       continue;
     }
     if (line.content === "否则：") {
-      const parsed = parseFailureLine(lines, index + 1, 12, diagnostics);
+      const parsed = parseFailureLine(lines, index + 1, expectedIndent + 4, diagnostics);
       failureMessage = parsed.message;
       index = parsed.nextIndex;
       continue;
@@ -580,8 +637,8 @@ function parseQuery(lines: SourceLine[], start: number, diagnostics: Diagnostic[
   };
 }
 
-function parseDelete(lines: SourceLine[], start: number, diagnostics: Diagnostic[]): { statement: DeleteStatement | null; nextIndex: number } {
-  const parsed = parseNameList(lines, start, 8, "删除", diagnostics);
+function parseDelete(lines: SourceLine[], start: number, expectedIndent: number, diagnostics: Diagnostic[]): { statement: DeleteStatement | null; nextIndex: number } {
+  const parsed = parseNameList(lines, start, expectedIndent, "删除", diagnostics);
   if (parsed.items.length !== 1) diagnostics.push(error("MVP 删除必须且只能指定一个对象", location(lines[start - 1]?.number ?? 1, 1)));
   const item = parsed.items[0];
   const expression = item ? parseExpression(item.text, item.line, item.column, diagnostics) : null;
@@ -620,6 +677,7 @@ function parseHttpEntry(lines: SourceLine[], start: number, diagnostics: Diagnos
   let successStatus = 0;
   const bodyMappings: HttpFieldMapping[] = [];
   const pathMappings: HttpFieldMapping[] = [];
+  const systemMappings: HttpSystemMapping[] = [];
   const failureMappings: { failureMessage: string; status: number; loc: SourceLocation }[] = [];
   let index = start + 1;
   while (index < lines.length) {
@@ -656,6 +714,15 @@ function parseHttpEntry(lines: SourceLine[], start: number, diagnostics: Diagnos
       index = parsed.nextIndex;
       continue;
     }
+    if (line.content === "系统提供：") {
+      const parsed = parseNameList(lines, index + 1, 8, "系统提供", diagnostics);
+      for (const item of parsed.items) {
+        const mapping = parseHttpSystemMapping(item.text, item.line, item.column, diagnostics);
+        if (mapping) systemMappings.push(mapping);
+      }
+      index = parsed.nextIndex;
+      continue;
+    }
     if (line.content === "成功：") {
       const parsed = parseReturnStatus(lines, index + 1, diagnostics);
       successStatus = parsed.status;
@@ -678,10 +745,19 @@ function parseHttpEntry(lines: SourceLine[], start: number, diagnostics: Diagnos
   if (!successStatus) diagnostics.push(error("HTTP 入口必须包含成功状态", lineLocation(header)));
   return {
     entry: name && method && path && targetFlow && successStatus
-      ? { kind: "http-entry", name, method, path, targetFlow, bodyMappings, pathMappings, successStatus, failureMappings, loc: lineLocation(header) }
+      ? { kind: "http-entry", name, method, path, targetFlow, bodyMappings, pathMappings, systemMappings, successStatus, failureMappings, loc: lineLocation(header) }
       : null,
     nextIndex: index,
   };
+}
+
+function parseHttpSystemMapping(text: string, line: number, column: number, diagnostics: Diagnostic[]): HttpSystemMapping | null {
+  const match = /^当前时间\s+作为\s+([\p{L}_][\p{L}\p{N}_]*)$/u.exec(text);
+  if (!match) {
+    diagnostics.push(error("系统提供格式应为“当前时间 作为 输入名称”", location(line, column)));
+    return null;
+  }
+  return { source: "current-time", targetName: match[1], loc: location(line, column) };
 }
 
 function parseHttpMapping(text: string, line: number, column: number, diagnostics: Diagnostic[]): HttpFieldMapping | null {
@@ -786,6 +862,8 @@ function parseType(text: string, line: SourceLine, column: number, diagnostics: 
   if (text === "整数") return INTEGER;
   if (text === "文本") return TEXT;
   if (text === "布尔") return BOOLEAN;
+  if (text === "时间") return TIME;
+  if (text === "持续时间") return DURATION;
   const money = /^(人民币|美元)金额(?:，单位为(.+))?$/.exec(text);
   if (money) {
     const currency = money[1] === "人民币" ? "CNY" : "USD";
@@ -795,7 +873,7 @@ function parseType(text: string, line: SourceLine, column: number, diagnostics: 
     return { kind: "money", currency, unit, scale: 2 };
   }
   if (isIdentifier(text)) return { kind: "named", name: text };
-  diagnostics.push(error("类型必须是整数、文本、布尔、人民币金额、美元金额、取值名称或对象名称", location(line.number, column)));
+  diagnostics.push(error("类型必须是整数、文本、布尔、时间、持续时间、人民币金额、美元金额、取值名称或对象名称", location(line.number, column)));
   return null;
 }
 
@@ -813,6 +891,12 @@ function tokenize(text: string, line: number, column: number, diagnostics: Diagn
       continue;
     }
     const tokenColumn = column + index;
+    const duration = /^\d+\s*天/u.exec(text.slice(index));
+    if (duration) {
+      tokens.push({ kind: "duration", value: duration[0], column: tokenColumn });
+      index += duration[0].length;
+      continue;
+    }
     const money = /^\d+\.\d{2}\s*(?:元|美元)/u.exec(text.slice(index));
     if (money) {
       tokens.push({ kind: "money", value: money[0], column: tokenColumn });
@@ -827,7 +911,8 @@ function tokenize(text: string, line: number, column: number, diagnostics: Diagn
     }
     const identifier = /^[\p{L}_][\p{L}\p{N}_]*/u.exec(text.slice(index));
     if (identifier) {
-      tokens.push({ kind: "identifier", value: identifier[0], column: tokenColumn });
+      const logicalOperator = ({ and: "并且", or: "或者", not: "非" } as Readonly<Record<string, string>>)[identifier[0]] ?? identifier[0];
+      tokens.push({ kind: ["并且", "或者", "非"].includes(logicalOperator) ? "operator" : "identifier", value: logicalOperator, column: tokenColumn });
       index += identifier[0].length;
       continue;
     }

@@ -1,6 +1,8 @@
 import {
   BOOLEAN,
+  DURATION,
   INTEGER,
+  TIME,
   UNKNOWN,
   type Expression,
   type FlowDeclaration,
@@ -10,6 +12,7 @@ import {
   type OutputField,
   type Program,
   type RecordType,
+  type Statement,
   type TypeField,
   type TypeRef,
   type ValueType,
@@ -179,7 +182,14 @@ function checkFlow(flow: FlowDeclaration, program: Program, typeInfo: ProgramTyp
     environment.set(input.name, resolveTypeWithoutDiagnostics(input.type, typeInfo.objectTypes, typeInfo.valueTypes));
   }
 
-  for (const statement of flow.statements) {
+  const checkStatements = (statements: readonly Statement[], environment: Environment, storedObjectNames: Set<string>): void => {
+    for (const statement of statements) {
+    if (statement.kind === "conditional") {
+      const conditionType = inferExpressionType(statement.condition, environment, diagnostics);
+      if (conditionType && conditionType.kind !== "boolean") diagnostics.push(error("条件业务步骤必须使用布尔条件", statement.condition.loc));
+      checkStatements(statement.statements, new Map(environment), new Set(storedObjectNames));
+      continue;
+    }
     if (statement.kind === "if") {
       const conditionType = inferExpressionType(statement.condition, environment, diagnostics);
       if (conditionType && conditionType.kind !== "boolean") {
@@ -312,7 +322,10 @@ function checkFlow(flow: FlowDeclaration, program: Program, typeInfo: ProgramTyp
         environment.set(name, called.output.fields[index].type);
       }
     }
-  }
+    }
+  };
+
+  checkStatements(flow.statements, environment, storedObjectNames);
 
   const output = checkOutputs(flow.outputs, environment, flow.name, diagnostics);
   (typeInfo.flowSignatures as Map<string, FlowSignature>).set(flow.name, { ...signature, output });
@@ -352,6 +365,16 @@ function checkHttpEntries(program: Program, typeInfo: ProgramTypeInfo, diagnosti
       if (sourceByLocation.has(locationKey)) diagnostics.push(error(`HTTP 请求字段重复：${mapping.sourceName}`, mapping.loc));
       sourceByLocation.add(locationKey);
     }
+    const systemSources = new Set<string>();
+    for (const mapping of entry.systemMappings) {
+      if (targetNames.has(mapping.targetName)) diagnostics.push(error(`HTTP 输入重复映射：${mapping.targetName}`, mapping.loc));
+      targetNames.add(mapping.targetName);
+      const input = signature.inputs.find((candidate) => candidate.name === mapping.targetName);
+      if (!input) diagnostics.push(error(`系统提供映射引用了未声明的流程输入：${mapping.targetName}`, mapping.loc));
+      else if (input.type.kind !== "time") diagnostics.push(error(`当前时间只能映射到时间输入：${mapping.targetName}`, mapping.loc));
+      if (systemSources.has(mapping.source)) diagnostics.push(error("同一 HTTP 入口不能重复提供当前时间", mapping.loc));
+      systemSources.add(mapping.source);
+    }
     for (const input of signature.inputs) if (!targetNames.has(input.name)) diagnostics.push(error(`HTTP 入口缺少流程输入映射：${input.name}`, entry.loc));
 
     const placeholders = [...entry.path.matchAll(/\{([\p{L}_][\p{L}\p{N}_]*)\}/gu)].map((match) => match[1]);
@@ -373,15 +396,21 @@ function checkHttpEntries(program: Program, typeInfo: ProgramTypeInfo, diagnosti
 function collectFlowFailures(flow: FlowDeclaration, program: Program, visiting: Set<string>): Set<string> {
   if (visiting.has(flow.name)) return new Set();
   visiting.add(flow.name);
+  const failures = collectStatementFailures(flow.statements, program, visiting);
+  visiting.delete(flow.name);
+  return failures;
+}
+
+function collectStatementFailures(statements: readonly Statement[], program: Program, visiting: Set<string>): Set<string> {
   const failures = new Set<string>();
-  for (const statement of flow.statements) {
+  for (const statement of statements) {
     if (statement.kind === "if" || statement.kind === "create" || statement.kind === "query") failures.add(statement.failureMessage);
+    if (statement.kind === "conditional") for (const message of collectStatementFailures(statement.statements, program, visiting)) failures.add(message);
     if (statement.kind === "execute") {
       const called = program.flows.find((candidate) => candidate.name === statement.flowName);
       if (called) for (const message of collectFlowFailures(called, program, visiting)) failures.add(message);
     }
   }
-  visiting.delete(flow.name);
   return failures;
 }
 
@@ -414,6 +443,7 @@ function checkFields(fields: readonly TypeField[], label: string, typeInfo: Prog
 export function inferExpressionType(expression: Expression, environment: Environment, diagnostics: Diagnostic[] = []): TypeRef | null {
   if (expression.kind === "integer-literal") return INTEGER;
   if (expression.kind === "money-literal") return { kind: "money", currency: expression.currency, unit: expression.unit, scale: expression.scale };
+  if (expression.kind === "duration-literal") return DURATION;
   if (expression.kind === "reference") {
     const type = environment.get(expression.name);
     if (!type) diagnostics.push(error(`引用了未定义的名称：${expression.name}`, expression.loc));
@@ -432,10 +462,21 @@ export function inferExpressionType(expression: Expression, environment: Environ
     }
     return field.type;
   }
+  if (expression.kind === "unary") {
+    const operand = inferExpressionType(expression.expression, environment, diagnostics);
+    if (operand?.kind === "boolean") return BOOLEAN;
+    if (operand) diagnostics.push(error(`运算 非 只支持布尔，实际是 ${describeType(operand)}`, expression.loc));
+    return null;
+  }
 
   const left = inferExpressionType(expression.left, environment, diagnostics);
   const right = inferExpressionType(expression.right, environment, diagnostics);
   if (!left || !right) return null;
+  if (expression.operator === "and" || expression.operator === "or") {
+    if (left.kind === "boolean" && right.kind === "boolean") return BOOLEAN;
+    diagnostics.push(error(`逻辑运算只支持布尔，实际是 ${describeType(left)} 与 ${describeType(right)}`, expression.loc));
+    return null;
+  }
   if ([">", ">=", "<", "<=", "==", "!="].includes(expression.operator)) {
     if (!areSameType(left, right)) {
       diagnostics.push(error(`比较两侧类型不兼容：${describeType(left)} 与 ${describeType(right)}`, expression.loc));
@@ -448,6 +489,7 @@ export function inferExpressionType(expression: Expression, environment: Environ
   if (expression.operator === "*" && isInteger(left) && isInteger(right)) return INTEGER;
   if (expression.operator === "*" && isMoney(left) && isInteger(right)) return left;
   if (expression.operator === "*" && isInteger(left) && isMoney(right)) return right;
+  if (expression.operator === "+" && left.kind === "time" && right.kind === "duration") return TIME;
   if ((expression.operator === "+" || expression.operator === "-") && areSameType(left, right) && (isInteger(left) || isMoney(left))) return left;
   diagnostics.push(error(`运算 ${expression.operator} 不支持类型 ${describeType(left)} 与 ${describeType(right)}`, expression.loc));
   return null;
@@ -459,6 +501,8 @@ export function areSameType(left: TypeRef, right: TypeRef): boolean {
   if (left.kind === "integer" && right.kind === "integer") return true;
   if (left.kind === "text" && right.kind === "text") return true;
   if (left.kind === "boolean" && right.kind === "boolean") return true;
+  if (left.kind === "time" && right.kind === "time") return true;
+  if (left.kind === "duration" && right.kind === "duration") return true;
   if (left.kind === "money" && right.kind === "money") return left.currency === right.currency && left.unit === right.unit && left.scale === right.scale;
   if (left.kind === "value" && right.kind === "value") return left.name === right.name;
   if (left.kind === "object" && right.kind === "object") return left.name === right.name;
@@ -470,6 +514,8 @@ export function describeType(type: TypeRef): string {
   if (type.kind === "integer") return "整数";
   if (type.kind === "text") return "文本";
   if (type.kind === "boolean") return "布尔";
+  if (type.kind === "time") return "时间";
+  if (type.kind === "duration") return "持续时间";
   if (type.kind === "money") return `${type.currency === "CNY" ? "人民币" : type.currency === "USD" ? "美元" : type.currency}金额（单位为${type.unit}）`;
   if (type.kind === "value") return `取值 ${type.name}`;
   if (type.kind === "named") return `未解析类型 ${type.name}`;

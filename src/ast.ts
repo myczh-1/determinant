@@ -3,7 +3,7 @@ export interface SourceLocation {
   readonly column: number;
 }
 
-export type TypeRef = IntegerType | TextType | BooleanType | MoneyType | ValueType | NamedType | ObjectType | RecordType | UnknownType;
+export type TypeRef = IntegerType | TextType | BooleanType | MoneyType | TimeType | DurationType | ValueType | NamedType | ObjectType | RecordType | UnknownType;
 
 export interface IntegerType { readonly kind: "integer"; }
 export interface TextType { readonly kind: "text"; }
@@ -15,6 +15,9 @@ export interface MoneyType {
   readonly unit: string;
   readonly scale: number;
 }
+
+export interface TimeType { readonly kind: "time"; }
+export interface DurationType { readonly kind: "duration"; }
 
 export interface ValueType {
   readonly kind: "value";
@@ -47,7 +50,7 @@ export interface TypeField {
   readonly loc?: SourceLocation;
 }
 
-export type Expression = IntegerLiteral | MoneyLiteral | ReferenceExpression | MemberExpression | BinaryExpression;
+export type Expression = IntegerLiteral | MoneyLiteral | DurationLiteral | ReferenceExpression | MemberExpression | UnaryExpression | BinaryExpression;
 
 export interface IntegerLiteral {
   readonly kind: "integer-literal";
@@ -64,6 +67,12 @@ export interface MoneyLiteral {
   readonly loc: SourceLocation;
 }
 
+export interface DurationLiteral {
+  readonly kind: "duration-literal";
+  readonly milliseconds: number;
+  readonly loc: SourceLocation;
+}
+
 export interface ReferenceExpression {
   readonly kind: "reference";
   readonly name: string;
@@ -77,9 +86,16 @@ export interface MemberExpression {
   readonly loc: SourceLocation;
 }
 
+export interface UnaryExpression {
+  readonly kind: "unary";
+  readonly operator: "not";
+  readonly expression: Expression;
+  readonly loc: SourceLocation;
+}
+
 export interface BinaryExpression {
   readonly kind: "binary";
-  readonly operator: "+" | "-" | "*" | "/" | "%" | ">" | ">=" | "<" | "<=" | "==" | "!=";
+  readonly operator: "+" | "-" | "*" | "/" | "%" | ">" | ">=" | "<" | "<=" | "==" | "!=" | "and" | "or";
   readonly left: Expression;
   readonly right: Expression;
   readonly loc: SourceLocation;
@@ -131,12 +147,19 @@ export interface FlowInput {
   readonly loc: SourceLocation;
 }
 
-export type Statement = IfStatement | CalculateStatement | ChangeStatement | ExecuteStatement | CreateStatement | QueryStatement | DeleteStatement;
+export type Statement = IfStatement | ConditionalStatement | CalculateStatement | ChangeStatement | ExecuteStatement | CreateStatement | QueryStatement | DeleteStatement;
 
 export interface IfStatement {
   readonly kind: "if";
   readonly condition: Expression;
   readonly failureMessage: string;
+  readonly loc: SourceLocation;
+}
+
+export interface ConditionalStatement {
+  readonly kind: "conditional";
+  readonly condition: Expression;
+  readonly statements: readonly Statement[];
   readonly loc: SourceLocation;
 }
 
@@ -198,6 +221,12 @@ export interface HttpFieldMapping {
   readonly loc: SourceLocation;
 }
 
+export interface HttpSystemMapping {
+  readonly source: "current-time";
+  readonly targetName: string;
+  readonly loc: SourceLocation;
+}
+
 export interface HttpFailureMapping {
   readonly failureMessage: string;
   readonly status: number;
@@ -212,6 +241,7 @@ export interface HttpEntryDeclaration {
   readonly targetFlow: string;
   readonly bodyMappings: readonly HttpFieldMapping[];
   readonly pathMappings: readonly HttpFieldMapping[];
+  readonly systemMappings: readonly HttpSystemMapping[];
   readonly successStatus: number;
   readonly failureMappings: readonly HttpFailureMapping[];
   readonly loc: SourceLocation;
@@ -233,4 +263,6 @@ export interface FlowSignature {
 export const INTEGER: IntegerType = Object.freeze({ kind: "integer" });
 export const TEXT: TextType = Object.freeze({ kind: "text" });
 export const BOOLEAN: BooleanType = Object.freeze({ kind: "boolean" });
+export const TIME: TimeType = Object.freeze({ kind: "time" });
+export const DURATION: DurationType = Object.freeze({ kind: "duration" });
 export const UNKNOWN: UnknownType = Object.freeze({ kind: "unknown" });
