@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
@@ -9,7 +10,9 @@ import { compileAAL, formatDiagnostic } from "../dist/index.js";
 
 const language = "zh-CN";
 const source = readFileSync(new URL("../examples/order-refund/app.zh-CN.aal", import.meta.url), "utf8");
-const baseFixture = JSON.parse(readFileSync(new URL("../examples/order-refund/fixture.v1.json", import.meta.url), "utf8"));
+const fixtureBytes = readFileSync(new URL("../examples/order-refund/fixture.v1.json", import.meta.url));
+const fixtureDigest = `sha256:${createHash("sha256").update(fixtureBytes).digest("hex")}`;
+const baseFixture = JSON.parse(fixtureBytes.toString("utf8"));
 const compiled = compileAAL(source, { language });
 assert.equal(compiled.diagnostics.length, 0, compiled.diagnostics.map(formatDiagnostic).join("\n"));
 assert.ok(compiled.code);
@@ -230,7 +233,7 @@ test("transport validation is deterministic and precedes business flow", () => {
   assert.deepEqual(request("GET", "/unknown"), { status: 404, body: { error: "Not found" } });
 });
 
-test("real HTTP shell uses the frozen fixture, clock, and invalid-JSON contract", async () => {
+test("real HTTP shell uses the frozen fixture, clock, and invalid-JSON contract", async (context) => {
   const child = spawn(process.execPath, [
     "bin/determinant.mjs",
     "run",
@@ -262,6 +265,13 @@ test("real HTTP shell uses the frozen fixture, clock, and invalid-JSON contract"
     const readable = await fetch(`http://127.0.0.1:${port}/orders/102/refundable`);
     assert.equal(readable.status, 200);
     assert.deepEqual(await readable.json(), { 订单编号: 102, 可退款金额: "200.00", 可退款数量: 2 });
+    context.diagnostic(JSON.stringify({
+      fixture: {
+        path: "examples/order-refund/fixture.v1.json",
+        digest: fixtureDigest,
+      },
+      clock: DAY_7,
+    }));
   } finally {
     child.kill("SIGTERM");
   }
