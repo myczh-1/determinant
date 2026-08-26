@@ -20,7 +20,7 @@
     "demo:http:zh": "npm run build && node bin/determinant.mjs run examples/items/app.zh-CN.aal --language zh-CN --host 127.0.0.1 --port 3000",
     "demo:order-refund": "npm run build && node bin/determinant.mjs run examples/order-refund/app.zh-CN.aal --language zh-CN --host 127.0.0.1 --port 3000 --fixture examples/order-refund/fixture.v1.json --clock 2026-01-08T00:00:00.000Z",
     "test:order-refund": "npm run build && node --test test/order-refund.oracle.test.mjs",
-    "test:order-refund:atomic-flow": "npm run build && DETERMINANT_ORDER_REFUND_AAL=examples/order-refund/app.atomic-flow.zh-CN.aal node --test test/order-refund.oracle.test.mjs",
+    "test:order-refund:composed-flow": "npm run build && DETERMINANT_ORDER_REFUND_AAL=examples/order-refund/app.composed-flow.zh-CN.aal node --test test/order-refund.oracle.test.mjs",
     "benchmark:prepare": "node benchmark/workspace/prepare.mjs",
     "benchmark:collect": "node benchmark/workspace/collect.mjs",
     "benchmark:score": "npm run build && node benchmark/scorer/score.mjs",

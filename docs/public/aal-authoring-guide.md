@@ -165,9 +165,9 @@ flow: DeductInventory
 
 Every flow must have an `output` section. An `if` condition must be Boolean. Its body may contain one explicit `failure` or nested business steps. A failed executed flow propagates the same failure to its containing flow.
 
-### Atomic-flow principle
+### Composable audit flows
 
-Here, “atomic” means a small audit responsibility. It does not mean transaction atomicity, and it does not mean that every flow becomes an HTTP entry.
+In semantically dense business logic, a single long flow can still become difficult to read. The current recommendation is to split it into small, single-responsibility, composable flows and compose them in a business-level flow. This mainly improves local auditability and later incremental review; it does not necessarily reduce the total line count, and it does not mean the readability problem is solved.
 
 When one flow combines several independently nameable responsibilities—such as querying context, deciding eligibility, validating an amount, calculating results, and changing state—AI should prefer small flows composed by one business-level orchestration flow. For example:
 
@@ -189,7 +189,9 @@ Each extracted flow should:
 
 The first review expands all relevant small flows. Later changes can focus primarily on the changed flow and its call relationships. HTTP entries normally target orchestration flows; internal small flows are not exposed externally.
 
-Atomic audit responsibility and atomic state commit are different concerns. When several state changes must commit together, retain an explicit `atomic` block even after splitting the behavior into smaller flows.
+Explicit `execute / use / get` connections make composition visible, but they also add connective text to the main flow. This remains an open language-design limitation and should not be presented as solved.
+
+Flow decomposition and atomic state commit are different concerns. When several state changes must commit together, retain an explicit `atomic` block even after splitting the behavior into smaller flows.
 
 ## Calculations and state changes
 
