@@ -83,13 +83,13 @@ if (runMode) {
     try {
       const body = await readJsonBody(request);
       if (body.invalid) {
-        sendJson(response, 400, { error: language === "zh-CN" ? "JSON 格式无效" : "Invalid JSON" });
+        sendJson(response, 400, { error: language === "zh-CN" ? "请求 JSON 无效" : "Invalid JSON" });
         return;
       }
       const handled = application.handleHttpRequest({ method: request.method ?? "", path: request.url ?? "/", body: body.value }, runtimeContext);
       sendJson(response, handled.status, handled.body);
     } catch {
-      sendJson(response, 500, { error: language === "zh-CN" ? "服务器内部错误" : "Internal server error" });
+      sendJson(response, 500, { error: "Internal server error" });
     }
   });
   server.listen(port, host, () => {

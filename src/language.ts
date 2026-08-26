@@ -30,7 +30,9 @@ export function runtimeMessages(language: AALLanguage): {
   invalidFixture: string;
   integerRequired: string;
   objectRequired: string;
-  invalidRequest: string;
+  missingField: string;
+  fieldType: string;
+  moneyFormat: string;
   routeNotFound: string;
 } {
   return language === "zh-CN"
@@ -44,8 +46,10 @@ export function runtimeMessages(language: AALLanguage): {
         invalidFixture: "Fixture 数据无效",
         integerRequired: "必须是整数",
         objectRequired: "必须是对象",
-        invalidRequest: "请求输入无效",
-        routeNotFound: "未找到路由",
+        missingField: "缺少字段：",
+        fieldType: "字段类型错误：",
+        moneyFormat: "金额格式错误：",
+        routeNotFound: "Not found",
       }
     : {
         invalidMoney: "Invalid amount",
@@ -57,7 +61,9 @@ export function runtimeMessages(language: AALLanguage): {
         invalidFixture: "Invalid fixture data",
         integerRequired: " must be an integer",
         objectRequired: " must be an object",
-        invalidRequest: "Invalid request input",
+        missingField: "Invalid request input",
+        fieldType: "Invalid request input",
+        moneyFormat: "Invalid request input",
         routeNotFound: "Not found",
       };
 }

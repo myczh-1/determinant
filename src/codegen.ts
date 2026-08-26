@@ -68,19 +68,20 @@ export function generateTypeScript(program: Program, bindingInput?: BindingSpec 
     "  return value as Record<string, unknown>;",
     "}",
     "",
-    "function readHttpInput(value: unknown, kind: \"integer\" | \"text\" | \"boolean\" | \"money\", fromPath: boolean, currency?: string, unit?: string, scale?: number): { readonly ok: true; readonly value: unknown } | { readonly ok: false } {",
+    "function readHttpInput(value: unknown, kind: \"integer\" | \"text\" | \"boolean\" | \"money\", fromPath: boolean, currency?: string, unit?: string, scale?: number): { readonly ok: true; readonly value: unknown } | { readonly ok: false; readonly error: \"missing\" | \"type\" | \"money-format\" } {",
+    "  if (value === undefined) return { ok: false, error: \"missing\" };",
     "  if (kind === \"integer\") {",
     "    const parsed = fromPath && typeof value === \"string\" && /^-?(?:0|[1-9]\\d*)$/.test(value) ? Number(value) : value;",
-    "    return Number.isSafeInteger(parsed) ? { ok: true, value: parsed } : { ok: false };",
+    "    return Number.isSafeInteger(parsed) ? { ok: true, value: parsed } : { ok: false, error: \"type\" };",
     "  }",
-    "  if (kind === \"text\") return typeof value === \"string\" ? { ok: true, value } : { ok: false };",
+    "  if (kind === \"text\") return typeof value === \"string\" ? { ok: true, value } : { ok: false, error: \"type\" };",
     "  if (kind === \"money\") {",
-    "    if (fromPath || typeof value !== \"string\" || currency === undefined || unit === undefined || scale === undefined) return { ok: false };",
+    "    if (fromPath || typeof value !== \"string\" || currency === undefined || unit === undefined || scale === undefined) return { ok: false, error: \"money-format\" };",
     "    const pattern = new RegExp(`^-?(?:0|[1-9]\\\\d*)\\\\.\\\\d{${scale}}$`);",
-    "    return pattern.test(value) ? { ok: true, value: money(currency, unit, scale, value) } : { ok: false };",
+    "    return pattern.test(value) ? { ok: true, value: money(currency, unit, scale, value) } : { ok: false, error: \"money-format\" };",
     "  }",
     "  if (fromPath && (value === \"true\" || value === \"false\")) return { ok: true, value: value === \"true\" };",
-    "  return typeof value === \"boolean\" ? { ok: true, value } : { ok: false };",
+    "  return typeof value === \"boolean\" ? { ok: true, value } : { ok: false, error: \"type\" };",
     "}",
     "",
     "function moneyAdd(left: Money, right: Money): Money {",
@@ -527,7 +528,11 @@ function generateHttp(
         ? `, ${JSON.stringify(input.type.currency)}, ${JSON.stringify(input.type.unit)}, ${input.type.scale}`
         : "";
       lines.push(`    const ${parsed} = readHttpInput(${raw}, ${JSON.stringify(input.type.kind)}, ${pathMapping ? "true" : "false"}${moneyArguments});`);
-      lines.push(`    if (!${parsed}.ok) return { status: 400, body: { error: ${JSON.stringify(messages.invalidRequest)} } };`);
+      const sourceName = (pathMapping ?? bodyMapping)!.sourceName;
+      const missingMessage = `${messages.missingField}${language === "zh-CN" ? sourceName : ""}`;
+      const moneyFormatMessage = `${messages.moneyFormat}${language === "zh-CN" ? sourceName : ""}`;
+      const fieldTypeMessage = `${messages.fieldType}${language === "zh-CN" ? sourceName : ""}`;
+      lines.push(`    if (!${parsed}.ok) return { status: 400, body: { error: ${parsed}.error === "missing" ? ${JSON.stringify(missingMessage)} : ${parsed}.error === "money-format" ? ${JSON.stringify(moneyFormatMessage)} : ${JSON.stringify(fieldTypeMessage)} } };`);
       parsedSymbols.set(input.name, `${parsed}.value as ${typeScriptType(input.type, objectAliases, outputAliases)}`);
     }
     const result = `http_result_${entryIndex}`;
