@@ -220,7 +220,7 @@ flow: UpdateItem
 
 `create` must assign every field and declare its duplicate-identity failure. `query` returns one object and declares its not-found failure. `delete` removes a previously created or queried object. The current runtime stores objects in memory only.
 
-See [examples/items.aal](../../examples/items.aal) for complete create, read, update, and delete flows.
+See [examples/items/app.aal](../../examples/items/app.aal) for complete create, read, update, and delete flows.
 
 ## HTTP entries
 
@@ -287,7 +287,7 @@ Binding is a separate build input. It must not add hidden business rules.
 
 ## Complete example and compilation
 
-The complete English example is [examples/order.aal](../../examples/order.aal). It contains two objects and three flows: total calculation, inventory deduction, and order creation.
+The complete English example is [examples/order/app.aal](../../examples/order/app.aal). It contains two objects and three flows: total calculation, inventory deduction, and order creation.
 
 ```bash
 npm run compile:example

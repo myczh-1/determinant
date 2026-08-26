@@ -8,11 +8,11 @@ import test from "node:test";
 import { compileAAL, formatDiagnostic, parseAAL, parseBinding } from "../dist/index.js";
 
 const language = "zh-CN";
-const source = readFileSync(new URL("../examples/order.zh-CN.aal", import.meta.url), "utf8");
-const bindingSource = readFileSync(new URL("../bindings/order.binding.zh-CN.json", import.meta.url), "utf8");
+const source = readFileSync(new URL("../examples/order/app.zh-CN.aal", import.meta.url), "utf8");
+const bindingSource = readFileSync(new URL("../examples/order/binding.zh-CN.json", import.meta.url), "utf8");
 const binding = parseBinding(bindingSource, language).spec;
 assert.ok(binding);
-const httpSource = readFileSync(new URL("../examples/items.zh-CN.aal", import.meta.url), "utf8");
+const httpSource = readFileSync(new URL("../examples/items/app.zh-CN.aal", import.meta.url), "utf8");
 
 test("中文 AAL 使用同一套编译器完成解析和生成", () => {
   const result = compileAAL(source, { binding, language });
@@ -59,7 +59,7 @@ test("中文诊断保持中文", () => {
 });
 
 test("中英文 Binding 使用相同稳定身份", () => {
-  const english = JSON.parse(readFileSync(new URL("../bindings/order.binding.json", import.meta.url), "utf8"));
+  const english = JSON.parse(readFileSync(new URL("../examples/order/binding.json", import.meta.url), "utf8"));
   const chinese = JSON.parse(bindingSource);
   assert.deepEqual(collectIds(english).sort(), collectIds(chinese).sort());
 });

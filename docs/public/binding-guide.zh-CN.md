@@ -61,8 +61,8 @@ Binding 不只是翻译层。
 
 P0 使用 JSON Binding 文件。完整示例是：
 
-- [bindings/order.binding.json](../../bindings/order.binding.json)
-- [bindings/order.binding.zh-CN.json](../../bindings/order.binding.zh-CN.json)
+- [examples/order/binding.json](../../examples/order/binding.json)
+- [examples/order/binding.zh-CN.json](../../examples/order/binding.zh-CN.json)
 
 Binding 文件包含 `version: 1`、`objects` 数组和 `flows` 数组。
 
@@ -182,9 +182,9 @@ npm run compile:example:zh
 npm run build
 
 node bin/determinant.mjs \
-  examples/order.zh-CN.aal \
+  examples/order/app.zh-CN.aal \
   --language zh-CN \
-  --binding bindings/order.binding.zh-CN.json \
+  --binding examples/order/binding.zh-CN.json \
   --out generated/order.zh-CN.ts
 ```
 

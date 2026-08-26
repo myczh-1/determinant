@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "name": "http-crud-black-box-v1",
+  "cases": [
+    {
+      "id": "route-not-found",
+      "request": { "method": "GET", "path": "/unknown" },
+      "expect": { "status": 404 }
+    },
+    {
+      "id": "invalid-json",
+      "request": {
+        "method": "POST",
+        "path": "/items",
+        "headers": { "content-type": "application/json" },
+        "rawBody": "{bad"
+      },
+      "expect": { "status": 400 }
+    },
+    {
+      "id": "missing-name",
+      "request": {
+        "method": "POST",
+        "path": "/items",
+        "json": { "id": 1 }
+      },
+      "expect": { "status": 400 }
+    },
+    {
+      "id": "invalid-id-type",
+      "request": {
+        "method": "POST",
+        "path": "/items",
+        "json": { "id": "1", "name": "Book" }
+      },
+      "expect": { "status": 400 }
+    },
+    {
+      "id": "create-item",
+      "request": {
+        "method": "POST",
+        "path": "/items",
+        "json": { "id": 101, "name": "Book" }
+      },
+      "expect": {
+        "status": 201,
+        "json": { "item": { "id": 101, "name": "Book" } }
+      }
+    },
+    {
+      "id": "duplicate-item",
+      "request": {
+        "method": "POST",
+        "path": "/items",
+        "json": { "id": 101, "name": "Duplicate" }
+      },
+      "expect": {
+        "status": 409,
+        "json": { "error": "Item already exists" }
+      }
+    },
+    {
+      "id": "read-item",
+      "request": { "method": "GET", "path": "/items/101" },
+      "expect": {
+        "status": 200,
+        "json": { "item": { "id": 101, "name": "Book" } }
+      }
+    },
+    {
+      "id": "read-missing-item",
+      "request": { "method": "GET", "path": "/items/999" },
+      "expect": {
+        "status": 404,
+        "json": { "error": "Item not found" }
+      }
+    },
+    {
+      "id": "update-missing-item",
+      "request": {
+        "method": "PUT",
+        "path": "/items/999",
+        "json": { "name": "Missing" }
+      },
+      "expect": {
+        "status": 404,
+        "json": { "error": "Item not found" }
+      }
+    },
+    {
+      "id": "update-item",
+      "request": {
+        "method": "PUT",
+        "path": "/items/101",
+        "json": { "name": "Notebook" }
+      },
+      "expect": {
+        "status": 200,
+        "json": { "item": { "id": 101, "name": "Notebook" } }
+      }
+    },
+    {
+      "id": "read-updated-item",
+      "request": { "method": "GET", "path": "/items/101" },
+      "expect": {
+        "status": 200,
+        "json": { "item": { "id": 101, "name": "Notebook" } }
+      }
+    },
+    {
+      "id": "delete-item",
+      "request": { "method": "DELETE", "path": "/items/101" },
+      "expect": { "status": 204, "bodyAbsent": true }
+    },
+    {
+      "id": "read-deleted-item",
+      "request": { "method": "GET", "path": "/items/101" },
+      "expect": {
+        "status": 404,
+        "json": { "error": "Item not found" }
+      }
+    },
+    {
+      "id": "delete-missing-item",
+      "request": { "method": "DELETE", "path": "/items/101" },
+      "expect": {
+        "status": 404,
+        "json": { "error": "Item not found" }
+      }
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "determinant-benchmark-direct-fail",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node --check src/server.mjs",
+    "start": "node src/server.mjs"
+  }
+}

@@ -163,6 +163,7 @@ Binding 不属于日常业务逻辑。业务行为主要在 AAL 中审计；当 
 - 共用同一编译链的英文与 `zh-CN` 方言
 - TypeScript 代码生成
 - 可执行的成功与失败路径测试
+- 不使用 LLM、由冻结黑盒 HTTP Oracle 裁决的 Benchmark Scorer
 
 当前目标运行时：
 
@@ -216,8 +217,16 @@ curl -X DELETE http://127.0.0.1:3000/items/1
 等价的直接启动命令是：
 
 ```bash
-node bin/determinant.mjs run examples/items.aal --host 127.0.0.1 --port 3000
+node bin/determinant.mjs run examples/items/app.aal --host 127.0.0.1 --port 3000
 ```
+
+运行 Direct 与 AAL 对比 Benchmark：
+
+```bash
+npm run benchmark:run
+```
+
+Benchmark 只构建和运行 submission 的临时副本，记录规范化行为指纹和审计面积指标，并在 `benchmark/results/` 下生成 `result.json`、`summary.json` 和 `report.md`。
 
 默认 AAL 方言为英文，无语言后缀的文件使用英文。
 
@@ -249,6 +258,7 @@ React、Vue 和其他 UI 表达暂不属于当前范围。
 - [Binding Guide](docs/public/binding-guide.md)
 - [中文 AAL 编写指南](docs/public/aal-authoring-guide.zh-CN.md)
 - [中文 Binding 指南](docs/public/binding-guide.zh-CN.md)
+- [Benchmark Scorer v1 中文说明](benchmark/README.zh-CN.md)
 - [English README](README.md)
 
 生成的 TypeScript 属于构建产物。

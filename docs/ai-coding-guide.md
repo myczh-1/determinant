@@ -52,6 +52,7 @@ npm run compile:example
 npm run test:zh
 npm run compile:example:zh
 npm run demo:http
+npm run benchmark:run
 ```
 
 Generated TypeScript must also pass strict type checking. The order and inventory example must verify success, insufficient inventory, invalid quantity, and mutation of the inventory object.

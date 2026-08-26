@@ -61,8 +61,8 @@ This lets the two human-facing dialects refer to the same program-world identity
 
 P0 uses JSON Binding files. The complete examples are:
 
-- [bindings/order.binding.json](../../bindings/order.binding.json)
-- [bindings/order.binding.zh-CN.json](../../bindings/order.binding.zh-CN.json)
+- [examples/order/binding.json](../../examples/order/binding.json)
+- [examples/order/binding.zh-CN.json](../../examples/order/binding.zh-CN.json)
 
 A Binding file contains `version: 1`, an `objects` array, and a `flows` array.
 
@@ -182,8 +182,8 @@ Direct CLI usage:
 npm run build
 
 node bin/determinant.mjs \
-  examples/order.aal \
-  --binding bindings/order.binding.json \
+  examples/order/app.aal \
+  --binding examples/order/binding.json \
   --out generated/order.ts
 ```
 

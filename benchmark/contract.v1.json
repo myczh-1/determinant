@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "name": "determinant-http-crud-v1",
+  "language": "en",
+  "host": "127.0.0.1",
+  "timeoutsMs": {
+    "prepare": 120000,
+    "build": 120000,
+    "start": 10000,
+    "request": 2000,
+    "stop": 3000
+  },
+  "direct": {
+    "required": [
+      "package.json",
+      "package-lock.json",
+      "src"
+    ],
+    "prepare": ["npm", "ci", "--ignore-scripts"],
+    "build": ["npm", "run", "build"],
+    "start": ["npm", "run", "start"],
+    "review": {
+      "primary": ["src"],
+      "operational": ["package.json"]
+    }
+  },
+  "aal": {
+    "required": ["app.aal"],
+    "source": "app.aal",
+    "binding": "binding.json",
+    "review": {
+      "primary": ["app.aal"],
+      "binding": ["binding.json"]
+    }
+  }
+}

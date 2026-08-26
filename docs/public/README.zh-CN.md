@@ -4,6 +4,7 @@
 
 - [AAL 编写指南](./aal-authoring-guide.zh-CN.md)
 - [Binding 绑定指南](./binding-guide.zh-CN.md)
+- [Benchmark Scorer v1 中文说明](../../benchmark/README.zh-CN.md)
 - [项目 README](../../README.zh-CN.md)
 - [English documentation](./README.md)
 

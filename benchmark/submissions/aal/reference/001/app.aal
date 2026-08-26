@@ -1,0 +1,166 @@
+application: ItemService
+
+object: Item
+
+    id: integer
+    name: text
+
+    identity:
+        id
+
+
+flow: CreateItem
+
+    input:
+        id: integer
+        name: text
+
+    create:
+        item: Item
+
+        with:
+            item's id = id
+            item's name = name
+
+        otherwise:
+            failure: Item already exists
+
+    output:
+        item
+
+
+flow: ReadItem
+
+    input:
+        id: integer
+
+    query:
+        item: Item
+
+        where:
+            item's id == id
+
+        otherwise:
+            failure: Item not found
+
+    output:
+        item
+
+
+flow: UpdateItem
+
+    input:
+        id: integer
+        name: text
+
+    query:
+        item: Item
+
+        where:
+            item's id == id
+
+        otherwise:
+            failure: Item not found
+
+    change:
+        item's name = name
+
+    output:
+        item
+
+
+flow: DeleteItem
+
+    input:
+        id: integer
+
+    query:
+        item: Item
+
+        where:
+            item's id == id
+
+        otherwise:
+            failure: Item not found
+
+    delete:
+        item
+
+    output:
+        id
+
+
+HTTP entry: Create Item
+
+    receive:
+        POST /items
+
+    use flow:
+        CreateItem
+
+    request body:
+        id
+        name
+
+    success:
+        return 201
+
+    if Item already exists:
+        return 409
+
+
+HTTP entry: Read Item
+
+    receive:
+        GET /items/{id}
+
+    use flow:
+        ReadItem
+
+    request path:
+        id
+
+    success:
+        return 200
+
+    if Item not found:
+        return 404
+
+
+HTTP entry: Update Item
+
+    receive:
+        PUT /items/{id}
+
+    use flow:
+        UpdateItem
+
+    request path:
+        id
+
+    request body:
+        name
+
+    success:
+        return 200
+
+    if Item not found:
+        return 404
+
+
+HTTP entry: Delete Item
+
+    receive:
+        DELETE /items/{id}
+
+    use flow:
+        DeleteItem
+
+    request path:
+        id
+
+    success:
+        return 204
+
+    if Item not found:
+        return 404

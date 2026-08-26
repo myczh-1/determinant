@@ -94,6 +94,15 @@
 - [x] Invalid JSON and invalid inputs return 400; route misses return 404.
 - [x] Host and port stay outside AAL.
 
+### 11. Frozen black-box benchmark scorer
+
+- [x] Direct Node.js and AAL submissions use explicit build and start contracts.
+- [x] Scoring uses no LLM and does not infer intent from implementation code.
+- [x] A frozen HTTP oracle records every case as pass or fail.
+- [x] Canonical behavioral fingerprints and review-surface metrics are reproducible.
+- [x] Submission source trees remain unchanged during scoring.
+- [x] Per-submission results aggregate into JSON and Markdown reports.
+
 ## P1 features
 
 ### 1. SQLite persistence

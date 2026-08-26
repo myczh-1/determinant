@@ -220,7 +220,7 @@ CRUD 行为仍然写在流程中：
 
 `创建` 必须给全部字段赋值，并声明身份重复时的失败；`查询` 只返回一个对象，并声明未找到时的失败；`删除` 移除先前创建或查询到的对象。当前运行时只把对象保存在内存中。
 
-完整的中文创建、读取、修改和删除流程见 [examples/items.zh-CN.aal](../../examples/items.zh-CN.aal)。
+完整的中文创建、读取、修改和删除流程见 [examples/items/app.zh-CN.aal](../../examples/items/app.zh-CN.aal)。
 
 ## HTTP 入口
 
@@ -281,7 +281,7 @@ Binding 是独立构建输入，不能增加隐藏业务规则。
 
 ## 完整示例与编译
 
-完整中文示例位于 [examples/order.zh-CN.aal](../../examples/order.zh-CN.aal)，包含订单总价计算、库存扣减和创建订单三个流程。
+完整中文示例位于 [examples/order/app.zh-CN.aal](../../examples/order/app.zh-CN.aal)，包含订单总价计算、库存扣减和创建订单三个流程。
 
 ```bash
 npm run compile:example:zh

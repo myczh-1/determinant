@@ -56,6 +56,7 @@ npm run compile:example
 npm run test:zh
 npm run compile:example:zh
 npm run demo:http
+npm run benchmark:run
 ```
 
 生成的 TypeScript 还应通过严格类型检查，并验证订单库存样例的成功、库存不足、数量无效和库存对象变化。

@@ -7,8 +7,8 @@ import { join } from "node:path";
 import test from "node:test";
 import { compileAAL, formatDiagnostic, parseBinding } from "../dist/index.js";
 
-const source = readFileSync(new URL("../examples/items.aal", import.meta.url), "utf8");
-const bindingSource = readFileSync(new URL("../bindings/items.binding.json", import.meta.url), "utf8");
+const source = readFileSync(new URL("../examples/items/app.aal", import.meta.url), "utf8");
+const bindingSource = readFileSync(new URL("../examples/items/binding.json", import.meta.url), "utf8");
 const binding = parseBinding(bindingSource).spec;
 assert.ok(binding);
 
@@ -108,7 +108,7 @@ test("CRUD semantic checks protect identity and delete provenance", () => {
 });
 
 test("the Node HTTP shell rejects invalid JSON", async () => {
-  const child = spawn(process.execPath, ["bin/determinant.mjs", "run", "examples/items.aal", "--host", "127.0.0.1", "--port", "0"], {
+  const child = spawn(process.execPath, ["bin/determinant.mjs", "run", "examples/items/app.aal", "--host", "127.0.0.1", "--port", "0"], {
     cwd: new URL("..", import.meta.url),
     stdio: ["ignore", "pipe", "pipe"],
   });

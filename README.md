@@ -163,6 +163,7 @@ The repository contains a minimal deterministic compiler loop:
 - English and `zh-CN` AAL dialects using one compiler pipeline
 - TypeScript code generation
 - Executable success and failure tests
+- Non-LLM benchmark scorer with a frozen black-box HTTP oracle
 
 The current target runtime is:
 
@@ -216,8 +217,16 @@ curl -X DELETE http://127.0.0.1:3000/items/1
 The equivalent direct command is:
 
 ```bash
-node bin/determinant.mjs run examples/items.aal --host 127.0.0.1 --port 3000
+node bin/determinant.mjs run examples/items/app.aal --host 127.0.0.1 --port 3000
 ```
+
+Run the direct-versus-AAL benchmark:
+
+```bash
+npm run benchmark:run
+```
+
+The benchmark builds and runs temporary copies of submissions, records canonical behavioral fingerprints and review-surface metrics, then writes `result.json`, `summary.json`, and `report.md` under `benchmark/results/`.
 
 English is the default AAL dialect and uses filenames without a language suffix.
 
@@ -245,6 +254,7 @@ React, Vue, and other UI description are outside the current scope.
 
 - [AAL Authoring Guide](docs/public/aal-authoring-guide.md)
 - [Binding Guide](docs/public/binding-guide.md)
+- [Benchmark Scorer v1](benchmark/README.md)
 - [中文 README](README.zh-CN.md)
 - [中文 AAL 编写指南](docs/public/aal-authoring-guide.zh-CN.md)
 - [中文 Binding 指南](docs/public/binding-guide.zh-CN.md)

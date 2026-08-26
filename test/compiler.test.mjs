@@ -7,8 +7,8 @@ import { join } from "node:path";
 import test from "node:test";
 import { compileAAL, formatDiagnostic, parseAAL, parseBinding } from "../dist/index.js";
 
-const source = readFileSync(new URL("../examples/order.aal", import.meta.url), "utf8");
-const bindingSource = readFileSync(new URL("../bindings/order.binding.json", import.meta.url), "utf8");
+const source = readFileSync(new URL("../examples/order/app.aal", import.meta.url), "utf8");
+const bindingSource = readFileSync(new URL("../examples/order/binding.json", import.meta.url), "utf8");
 const binding = parseBinding(bindingSource).spec;
 assert.ok(binding);
 

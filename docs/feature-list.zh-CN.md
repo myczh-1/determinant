@@ -103,6 +103,15 @@
 - [x] 非法 JSON 和非法输入返回 400，路由未匹配返回 404。
 - [x] Host 和 Port 不进入 AAL。
 
+### 11. 冻结黑盒 Benchmark Scorer
+
+- [x] Direct Node.js 与 AAL submission 使用明确的构建和启动约定。
+- [x] 评分不使用 LLM，也不从实现代码推断意图。
+- [x] 冻结 HTTP Oracle 为每个用例记录通过或失败。
+- [x] 规范化行为指纹和审计面积指标可以复现。
+- [x] 评分过程不改变 submission 源目录。
+- [x] 每份 submission 结果可以聚合为 JSON 和 Markdown 报告。
+
 ## P1 Features
 
 ### 1. SQLite 持久化

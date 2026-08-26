@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "contractDigest": "sha256:5185e5a5ccfe22b42898ce570e55558832405caa0b3e4f03231db7434d9f2a10",
+  "oracleDigest": "sha256:201c385a2eeb93bcbaff3ccfca73212f370ae204d5bd54f21950f293ffa80ce5",
+  "scorerDigests": [
+    "sha256:4bbf0c8a2a84cdd1c820d039f26dfe526d10663f570a2e89d44128156bcf4769"
+  ],
+  "totals": {
+    "submissions": 2,
+    "buildPassed": 2,
+    "serviceStarted": 2,
+    "fullyPassed": 2,
+    "oraclePassed": 28,
+    "oracleTotal": 28,
+    "medianReviewNonBlankLinesForPassing": 90.5,
+    "medianReviewBytesForPassing": 2561
+  },
+  "modes": {
+    "direct": {
+      "submissions": 1,
+      "buildPassed": 1,
+      "serviceStarted": 1,
+      "fullyPassed": 1,
+      "oraclePassed": 14,
+      "oracleTotal": 14,
+      "medianReviewNonBlankLinesForPassing": 77,
+      "medianReviewBytesForPassing": 3197
+    },
+    "aal": {
+      "submissions": 1,
+      "buildPassed": 1,
+      "serviceStarted": 1,
+      "fullyPassed": 1,
+      "oraclePassed": 14,
+      "oracleTotal": 14,
+      "medianReviewNonBlankLinesForPassing": 104,
+      "medianReviewBytesForPassing": 1925
+    }
+  },
+  "pairedComparisons": [
+    {
+      "tool": "reference",
+      "run": "001",
+      "comparable": true,
+      "directNonBlankLines": 77,
+      "aalNonBlankLines": 104,
+      "lineReductionPercent": -35.06,
+      "directBytes": 3197,
+      "aalBytes": 1925,
+      "byteReductionPercent": 39.79
+    }
+  ],
+  "submissions": [
+    {
+      "mode": "aal",
+      "tool": "reference",
+      "run": "001",
+      "resultPath": "benchmark/results/aal/reference/001/result.json",
+      "sourceDigest": "sha256:d81065b4e64c4b29c057706dbd5759131b8362dc2b2219b7884acc8a06b67ef6",
+      "buildStatus": "PASS",
+      "serviceStatus": "PASS",
+      "oraclePassed": 14,
+      "oracleTotal": 14,
+      "fullyPassed": true,
+      "behavioralFingerprint": "sha256:45d256cf00bcf74e0cc7a1257374519407f10f820d8c62fe5955ceb8aef63b15",
+      "reviewSurface": {
+        "files": 1,
+        "bytes": 1925,
+        "lines": 166,
+        "nonBlankLines": 104,
+        "digest": "sha256:9b4658f1732ca34fb74b7141e6f9513b00efbe3fae68965cd551db4c9ca979c6"
+      },
+      "integrityStatus": "PASS"
+    },
+    {
+      "mode": "direct",
+      "tool": "reference",
+      "run": "001",
+      "resultPath": "benchmark/results/direct/reference/001/result.json",
+      "sourceDigest": "sha256:8be3f6ae64f1809dabc5d8ee6f869e1014b05d84479315ab1bf79af5ded75ff0",
+      "buildStatus": "PASS",
+      "serviceStatus": "PASS",
+      "oraclePassed": 14,
+      "oracleTotal": 14,
+      "fullyPassed": true,
+      "behavioralFingerprint": "sha256:45d256cf00bcf74e0cc7a1257374519407f10f820d8c62fe5955ceb8aef63b15",
+      "reviewSurface": {
+        "files": 1,
+        "bytes": 3197,
+        "lines": 86,
+        "nonBlankLines": 77,
+        "digest": "sha256:736e1e59dfd5d71a2a3f6cc683a2d6a3aa8970823677eab40aca9ba8ea256b4a"
+      },
+      "integrityStatus": "PASS"
+    }
+  ]
+}
