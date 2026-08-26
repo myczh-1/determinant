@@ -10,13 +10,17 @@ examples/
 │   ├── app.aal
 │   ├── app.zh-CN.aal
 │   └── binding.json
-└── order/
-    ├── app.aal
+├── order/
+│   ├── app.aal
+│   ├── app.zh-CN.aal
+│   ├── binding.json
+│   └── binding.zh-CN.json
+└── order-refund/
     ├── app.zh-CN.aal
-    ├── binding.json
-    └── binding.zh-CN.json
+    ├── fixture.v1.json
+    └── README.zh-CN.md
 ```
 
 Generated TypeScript remains in the ignored top-level `generated/` directory.
 
-`order-refund/` contains a Chinese-first design-stage specification for a future semantic-density example. It is intentionally not runnable until its language requirements are reviewed and implemented.
+`order-refund/` is a runnable, Chinese-first semantic-density example for payment, cancellation, refund, and inventory restock behavior. See its [Chinese guide](./order-refund/README.zh-CN.md).

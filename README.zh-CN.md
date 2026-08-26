@@ -42,6 +42,8 @@ HTTP entry（HTTP 入口）
 
 HTTP 入口把 HTTP 请求映射到流程。Host 和 Port 属于运行配置，不属于业务行为，因此不会写入 AAL。
 
+业务领域存在有限词汇时，`取值` 声明会明确列出所有允许项，不把它们降级为任意文本或实现代码。
+
 例如，默认英文方言可以写成：
 
 ```aal
@@ -159,6 +161,11 @@ Binding 不属于日常业务逻辑。业务行为主要在 AAL 中审计；当 
 - 确定性解析
 - 语义检查与诊断
 - 显式金额类型
+- 封闭业务取值集合
+- UTC 时间、固定持续时间与可信 Runtime 时钟
+- 条件业务步骤区块
+- 显式内存原子创建/改变区块
+- 经验证、整体替换的 Fixture 加载
 - 可选 Binding、稳定 ID 和程序名称
 - 共用同一编译链的英文与 `zh-CN` 方言
 - TypeScript 代码生成
@@ -171,7 +178,7 @@ Binding 不属于日常业务逻辑。业务行为主要在 AAL 中审计；当 
 Node.js + TypeScript
 ```
 
-持久化、事务、鉴权、列表查询和外部系统适配不属于当前 MVP。
+持久化、数据库事务、鉴权、列表查询和外部系统适配不属于当前 MVP。
 
 ## 运行
 
@@ -191,11 +198,17 @@ npm run compile:example:zh
 # 全部测试
 npm run test:all
 
+# 语义密集型订单退款冻结 Oracle
+npm run test:order-refund
+
 # 运行内存 HTTP CRUD 演示
 npm run demo:http
 
 # 中文 AAL HTTP 演示
 npm run demo:http:zh
+
+# 中文订单退款与库存回补演示
+npm run demo:order-refund
 ```
 
 演示启动后可以执行：
@@ -219,6 +232,8 @@ curl -X DELETE http://127.0.0.1:3000/items/1
 ```bash
 node bin/determinant.mjs run examples/items/app.aal --host 127.0.0.1 --port 3000
 ```
+
+[中文订单退款示例](examples/order-refund/README.zh-CN.md)把 39 项跟踪语义明确归属到 AAL、冻结 Fixture 或语言级传输保证中。
 
 运行 Direct 与 AAL 对比 Benchmark：
 
@@ -284,6 +299,7 @@ React、Vue 和其他 UI 表达暂不属于当前范围。
 - [中文 AAL 编写指南](docs/public/aal-authoring-guide.zh-CN.md)
 - [中文 Binding 指南](docs/public/binding-guide.zh-CN.md)
 - [Benchmark Scorer v1 中文说明](benchmark/README.zh-CN.md)
+- [订单退款与库存回补示例](examples/order-refund/README.zh-CN.md)
 - [English README](README.md)
 
 生成的 TypeScript 属于构建产物。

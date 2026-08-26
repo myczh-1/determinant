@@ -27,7 +27,7 @@ Both dialects enter the same AST, checker, Binding resolver, and code generator.
 ## Rules for AI-generated AAL
 
 1. Output AAL, not TypeScript, JavaScript, or pseudocode presented as AAL.
-2. Use only `object`, `flow`, and `HTTP entry` as top-level declarations after the application header.
+2. Use only `values`, `object`, `flow`, and `HTTP entry` as top-level declarations after the application header.
 3. Use possessive field relationships such as `inventory's quantity`; do not use dot access, brackets, `this`, methods, or calls.
 4. Do not invent fields, types, currencies, units, precision, permissions, retries, concurrency, rollback, rounding, or failure behavior.
 5. Give every object field and flow input an explicit type.
@@ -99,14 +99,16 @@ The MVP does not generate IDs. Creating another object with the same identity fa
 
 ## Types
 
-P0 supports these declarations:
+The current language supports these declarations:
 
 ```text
 integer
 text
 boolean
+time
 CNY amount
 USD amount
+the name of a declared values set
 the name of a declared object
 ```
 
@@ -127,7 +129,14 @@ unitPrice: CNY amount, unit yuan
 
 P0 still fixes the scale at two decimal places. Custom precision is not supported. A non-standard unit must come from a confirmed business requirement; neither AI nor the compiler should invent one.
 
-P0 expressions have integer literals only. Text and Boolean values may be declared as fields or inputs, but text and Boolean literal syntax is not implemented yet.
+Integer literals and exact two-decimal money literals are available in expressions:
+
+```aal
+if amount <= 0.00 CNY:
+    failure: Amount must be positive
+```
+
+Text and Boolean literal syntax is not implemented yet. Closed business values use a declared `values` set instead of arbitrary text.
 
 ## Flows
 
@@ -153,7 +162,7 @@ flow: DeductInventory
         remainingInventory = inventory's quantity
 ```
 
-Every flow must have an `output` section. An `if` condition must be Boolean and its next indented meaningful line must contain the explicit `failure` message. A failed executed flow propagates the same failure to its containing flow.
+Every flow must have an `output` section. An `if` condition must be Boolean. Its body may contain one explicit `failure` or nested business steps. A failed executed flow propagates the same failure to its containing flow.
 
 ## Calculations and state changes
 
@@ -172,6 +181,37 @@ change:
 ```
 
 The target of `change` must be an object field. Inputs, calculations, and flow outputs cannot be mutated directly.
+
+## Closed values, time, and atomic changes
+
+Declare finite business values explicitly:
+
+```aal
+values: OrderStatus
+    Unpaid
+    Paid
+    FullyRefunded
+```
+
+Members are typed values, not arbitrary strings. Members from different value sets cannot be compared or assigned to each other.
+
+Time is an exact UTC instant. A duration literal such as `7 days` is a fixed multiple of 24 hours. An HTTP entry can provide trusted current time without accepting it from the request:
+
+```aal
+system provided:
+    current time as operationTime
+```
+
+Use `atomic` when several creates and changes must commit together:
+
+```aal
+atomic:
+    change:
+        order's status = Paid
+        inventory's quantity = inventory's quantity + quantity
+```
+
+The in-memory runtime stages the block, validates every create, and only then commits its creates and changes. This is not a database isolation or distributed-transaction guarantee.
 
 ## Flow composition
 
@@ -256,6 +296,8 @@ request body:
     display_name as name
 ```
 
+Trusted time inputs are mapped separately under `system provided`; they cannot also be mapped from the path or body. HTTP money inputs use fixed two-decimal strings such as `"100.00"`, and money outputs use the same representation.
+
 The MVP fixes these transport rules: invalid JSON, missing inputs, and wrong input types return `400`; unmatched routes return `404`; declared flow failures use their mapped status; unhandled runtime errors return `500`; and a successful `204` response has no body. Host and port are supplied at runtime and never appear in AAL.
 
 ## Expressions and operators
@@ -263,7 +305,7 @@ The MVP fixes these transport rules: invalid JSON, missing inputs, and wrong inp
 The parser recognizes:
 
 ```text
-+  -  *  /  %  >  >=  <  <=  ==  !=  (  )
++  -  *  /  %  >  >=  <  <=  ==  !=  and  or  not  (  )
 ```
 
 `=` assigns a calculation, change, or named output. Equality comparison uses `==`.
@@ -273,7 +315,10 @@ P0 type checking allows:
 - integer arithmetic;
 - addition and subtraction of amounts with identical currency, unit, and scale;
 - multiplication of an amount by an integer in either order;
-- comparison of compatible values.
+- comparison of compatible values;
+- adding a duration such as `7 days` to a time;
+- UTC time comparison;
+- Boolean `and`, `or`, and `not`.
 
 Integer `/` currently follows generated TypeScript numeric division. Its long-term rounding semantics have not been formalized, so do not use it where a fractional result is possible without a separately confirmed rule.
 
@@ -287,7 +332,7 @@ Binding is a separate build input. It must not add hidden business rules.
 
 ## Complete example and compilation
 
-The complete English example is [examples/order/app.aal](../../examples/order/app.aal). It contains two objects and three flows: total calculation, inventory deduction, and order creation.
+The basic English example is [examples/order/app.aal](../../examples/order/app.aal). The semantic-density example is currently Chinese-first at [examples/order-refund/app.zh-CN.aal](../../examples/order-refund/app.zh-CN.aal).
 
 ```bash
 npm run compile:example
@@ -301,26 +346,33 @@ Run the HTTP CRUD example with:
 npm run demo:http
 ```
 
+Run the frozen order-refund oracle with:
+
+```bash
+npm run test:order-refund
+```
+
 ## Current P0 limits
 
 P0 does not yet provide:
 
 - text or Boolean literals;
 - custom amount precision;
-- persistence, transactions, automatic IDs, list queries, or filters;
+- persistence, database transactions, automatic IDs, list queries, or filters;
 - third-party API, SDK, or database adapters;
-- PATCH, CORS, authentication, retries, concurrency, permissions, or rollback semantics.
+- PATCH, CORS, authentication, retries, concurrency, or permissions.
 
 Do not simulate these capabilities with hidden conventions.
 
 ## Review checklist
 
 - [ ] Does the file start with one application header?
-- [ ] Are the remaining top-level declarations only objects, flows, and HTTP entries?
+- [ ] Are the remaining top-level declarations only values, objects, flows, and HTTP entries?
 - [ ] Does every object field and flow input have a type?
 - [ ] Does every amount declare CNY or USD, and is every non-standard unit confirmed?
 - [ ] Does every field relationship use the possessive form instead of dot access?
 - [ ] Are all state changes explicit under `change`?
+- [ ] Are multi-object all-or-nothing changes explicit under `atomic`?
 - [ ] Are all flow compositions explicit under `execute / use / get`?
 - [ ] Are all failure conditions and messages explicit?
 - [ ] Does every CRUD object declare its identity?

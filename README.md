@@ -42,6 +42,8 @@ A flow describes what happens in the application.
 
 An HTTP entry maps an HTTP request to a flow. Host and port remain runtime configuration rather than business behavior.
 
+When the domain has a finite vocabulary, a `values` declaration makes its allowed terms explicit without turning them into arbitrary text or implementation codes.
+
 For example:
 
 ```aal
@@ -159,6 +161,11 @@ The repository contains a minimal deterministic compiler loop:
 - Deterministic parsing
 - Semantic checks and diagnostics
 - Explicit money types
+- Closed business value sets
+- UTC time, fixed durations, and trusted runtime clocks
+- Conditional business-step blocks
+- Explicit in-memory atomic create/change blocks
+- Validated, all-or-nothing Fixture loading
 - Optional Binding with stable IDs and program-facing names
 - English and `zh-CN` AAL dialects using one compiler pipeline
 - TypeScript code generation
@@ -171,7 +178,7 @@ The current target runtime is:
 Node.js + TypeScript
 ```
 
-Persistence, transactions, authentication, list queries, and external system adapters are not part of this MVP.
+Persistence, database transactions, authentication, list queries, and external system adapters are not part of this MVP.
 
 ## Run
 
@@ -191,11 +198,17 @@ npm run compile:example:zh
 # All tests
 npm run test:all
 
+# Frozen semantic-density order-refund oracle
+npm run test:order-refund
+
 # Run the in-memory HTTP CRUD demo
 npm run demo:http
 
 # The same CRUD semantics through the Chinese AAL dialect
 npm run demo:http:zh
+
+# Chinese order-refund and inventory-restock demo
+npm run demo:order-refund
 ```
 
 With the demo running:
@@ -219,6 +232,8 @@ The equivalent direct command is:
 ```bash
 node bin/determinant.mjs run examples/items/app.aal --host 127.0.0.1 --port 3000
 ```
+
+The [Chinese order-refund example](examples/order-refund/README.zh-CN.md) makes 39 tracked semantics visible across AAL, the frozen Fixture, and language-level transport guarantees.
 
 Run the direct-versus-AAL benchmark:
 
@@ -280,6 +295,7 @@ React, Vue, and other UI description are outside the current scope.
 - [AAL Authoring Guide](docs/public/aal-authoring-guide.md)
 - [Binding Guide](docs/public/binding-guide.md)
 - [Benchmark Scorer v1](benchmark/README.md)
+- [Chinese order-refund example](examples/order-refund/README.zh-CN.md)
 - [中文 README](README.zh-CN.md)
 - [中文 AAL 编写指南](docs/public/aal-authoring-guide.zh-CN.md)
 - [中文 Binding 指南](docs/public/binding-guide.zh-CN.md)

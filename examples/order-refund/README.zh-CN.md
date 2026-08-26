@@ -1,16 +1,19 @@
 # 订单退款与库存回补
 
-这是 Determinant 的第一个中文优先、语义密集型示例设计。
+这是 Determinant 的第一个中文优先、语义密集型可运行示例。
 
-当前状态：**规格冻结候选，尚未实现，不能运行。**
+当前状态：**第一里程碑已实现。**
 
-本阶段只建立可审计的业务基线，不修改编译器，也不使用 Runtime 代替 AAL 实现缺失的业务规则。
+业务状态机、金额、时间、角色、错误顺序和多对象改变都写在 AAL 中。Runtime 只提供通用的精确金额、UTC 时间、顺序求值、原子提交、Fixture 加载和 HTTP 传输语义。
 
 ## 文档
 
 - [冻结业务规格 v1](./requirements.zh-CN.md)
 - [AAL 语言能力增量规格 v1](./language-increment.zh-CN.md)
 - [语义可见性与 Oracle 映射](./semantic-map.zh-CN.md)
+- [真人审计测试表](./human-review-protocol.zh-CN.md)
+- [中文 AAL 应用](./app.zh-CN.aal)
+- [冻结 Fixture](./fixture.v1.json)
 
 ## 已确定边界
 
@@ -20,11 +23,43 @@
 - requestId 幂等属于第二里程碑，不进入第一版。
 - 示例表层使用中文 AAL，但所有新增语义必须进入中英文共用 AST、检查器和运行时，不能成为中文特例。
 
-## 实现门槛
+## 自动验证
 
-只有以下内容经过人工确认后才开始修改语言和编译器：
+```bash
+npm run test:order-refund
+```
 
-1. 每条业务规则无歧义；
-2. 每种失败的优先级、消息和 HTTP 状态固定；
-3. 每条业务规则能追溯到未来 AAL 或明确的语言标准保证；
-4. Runtime 私自决定的业务语义数量为零。
+冻结 Oracle 包含 24 个测试组，覆盖 39 项跟踪语义，并包含一次真实 HTTP 服务启动验证。测试结果诊断会记录 Fixture 的 SHA-256 摘要和固定时钟。
+
+## 运行服务
+
+```bash
+npm run demo:order-refund
+```
+
+服务固定使用 `fixture.v1.json` 和 `2026-01-08T00:00:00.000Z` 测试时钟。
+
+```bash
+curl http://127.0.0.1:3000/orders/102/refundable
+
+curl -X POST http://127.0.0.1:3000/orders/102/refund \
+  -H "Content-Type: application/json" \
+  -d '{"userId":1,"amount":"100.00","quantity":1}'
+
+curl -X POST http://127.0.0.1:3000/orders/101/pay \
+  -H "Content-Type: application/json" \
+  -d '{"amount":"200.00"}'
+```
+
+内存状态在服务重启后恢复为冻结 Fixture。
+
+## 真人测试
+
+第一轮只向参与者提供：
+
+```text
+app.zh-CN.aal
+human-review-protocol.zh-CN.md
+```
+
+不要展示业务规格、语义映射、Oracle、生成代码或编译器实现。第二轮再提供规格和语义映射，用于定位 39 项语义。

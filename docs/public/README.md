@@ -5,6 +5,7 @@ This directory contains the public documentation for people and AI systems that 
 - [AAL Authoring Guide](./aal-authoring-guide.md)
 - [Binding Guide](./binding-guide.md)
 - [Benchmark Scorer v1](../../benchmark/README.md)
+- [Chinese order-refund example](../../examples/order-refund/README.zh-CN.md)
 - [Project README](../../README.md)
 - [中文文档](./README.zh-CN.md)
 
