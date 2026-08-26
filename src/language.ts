@@ -27,6 +27,7 @@ export function runtimeMessages(language: AALLanguage): {
   moneyMismatch: string;
   incompatibleMoney: string;
   invalidTime: string;
+  invalidFixture: string;
   integerRequired: string;
   objectRequired: string;
   invalidRequest: string;
@@ -40,6 +41,7 @@ export function runtimeMessages(language: AALLanguage): {
         moneyMismatch: "的币种、单位或精度不匹配",
         incompatibleMoney: "金额的币种、单位或精度不匹配",
         invalidTime: "时间格式无效",
+        invalidFixture: "Fixture 数据无效",
         integerRequired: "必须是整数",
         objectRequired: "必须是对象",
         invalidRequest: "请求输入无效",
@@ -52,6 +54,7 @@ export function runtimeMessages(language: AALLanguage): {
         moneyMismatch: " currency, unit, or precision does not match",
         incompatibleMoney: "Money currency, unit, or precision does not match",
         invalidTime: "Invalid time",
+        invalidFixture: "Invalid fixture data",
         integerRequired: " must be an integer",
         objectRequired: " must be an object",
         invalidRequest: "Invalid request input",
@@ -77,6 +80,7 @@ function normalizeEnglishLine(text: string): string {
     "input:": "输入：",
     "calculate:": "计算：",
     "change:": "改变：",
+    "atomic:": "同时生效：",
     "execute:": "执行：",
     "use:": "使用：",
     "get:": "得到：",

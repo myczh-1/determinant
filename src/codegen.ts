@@ -128,6 +128,51 @@ export function generateTypeScript(program: Program, bindingInput?: BindingSpec 
     "  return left.epochMilliseconds < right.epochMilliseconds ? -1 : left.epochMilliseconds > right.epochMilliseconds ? 1 : 0;",
     "}",
     "",
+    "type FixtureType = { readonly kind: \"integer\" | \"text\" | \"boolean\" | \"money\" | \"time\" | \"value\" | \"unsupported\"; readonly currency?: string; readonly unit?: string; readonly scale?: number; readonly values?: readonly string[] };",
+    "",
+    "function fixtureRecord(value: unknown, label: string): Record<string, unknown> {",
+    `  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(${JSON.stringify(messages.invalidFixture)} + ": " + label);`,
+    "  return value as Record<string, unknown>;",
+    "}",
+    "",
+    "function fixtureKeys(value: Record<string, unknown>, expected: readonly string[], label: string): void {",
+    "  const actual = Object.keys(value).sort();",
+    "  const wanted = [...expected].sort();",
+    `  if (JSON.stringify(actual) !== JSON.stringify(wanted)) throw new Error(${JSON.stringify(messages.invalidFixture)} + ": " + label);`,
+    "}",
+    "",
+    "function fixtureValue(value: unknown, type: FixtureType, label: string): unknown {",
+    "  if (type.kind === \"integer\") {",
+    `    if (!Number.isSafeInteger(value)) throw new Error(${JSON.stringify(messages.invalidFixture)} + ": " + label);`,
+    "    return value;",
+    "  }",
+    "  if (type.kind === \"text\") {",
+    `    if (typeof value !== "string") throw new Error(${JSON.stringify(messages.invalidFixture)} + ": " + label);`,
+    "    return value;",
+    "  }",
+    "  if (type.kind === \"boolean\") {",
+    `    if (typeof value !== "boolean") throw new Error(${JSON.stringify(messages.invalidFixture)} + ": " + label);`,
+    "    return value;",
+    "  }",
+    "  if (type.kind === \"money\") {",
+    "    const scale = type.scale ?? 0;",
+    "    const pattern = new RegExp(`^-?(?:0|[1-9]\\\\d*)\\\\.\\\\d{${scale}}$`);",
+    `    if (typeof value !== "string" || !pattern.test(value) || !type.currency || !type.unit) throw new Error(${JSON.stringify(messages.invalidFixture)} + ": " + label);`,
+    "    return money(type.currency, type.unit, scale, value);",
+    "  }",
+    "  if (type.kind === \"time\") {",
+    `    if (typeof value !== "string") throw new Error(${JSON.stringify(messages.invalidFixture)} + ": " + label);`,
+    "    const parsed = time(value);",
+    `    if (timeValue(parsed) !== value) throw new Error(${JSON.stringify(messages.invalidFixture)} + ": " + label);`,
+    "    return parsed;",
+    "  }",
+    "  if (type.kind === \"value\") {",
+    `    if (typeof value !== "string" || !type.values?.includes(value)) throw new Error(${JSON.stringify(messages.invalidFixture)} + ": " + label);`,
+    "    return value;",
+    "  }",
+    `  throw new Error(${JSON.stringify(messages.invalidFixture)} + ": " + label);`,
+    "}",
+    "",
   ];
 
   for (const [name, objectType] of typeInfo.objectTypes) {
@@ -147,6 +192,8 @@ export function generateTypeScript(program: Program, bindingInput?: BindingSpec 
     lines.push("", "export function resetStore(): void {");
     for (const storeName of storeAliases.values()) lines.push(`  ${storeName}.clear();`);
     lines.push("}", "");
+    lines.push(...generateFixtureLoader(program, typeInfo, binding, objectAliases, storeAliases, messages.invalidFixture));
+    lines.push("");
   }
 
   for (const flow of program.flows) {
@@ -172,6 +219,59 @@ export function generateTypeScript(program: Program, bindingInput?: BindingSpec 
     lines.push(...generateHttp(program, typeInfo, binding, objectAliases, outputAliases, flowAliases, language));
   }
   return `${lines.join("\n")}\n`;
+}
+
+function generateFixtureLoader(
+  program: Program,
+  typeInfo: ProgramTypeInfo,
+  binding: ResolvedBinding,
+  objectAliases: ReadonlyMap<string, string>,
+  storeAliases: ReadonlyMap<string, string>,
+  invalidFixtureMessage: string,
+): string[] {
+  const storedObjects = program.objects.filter((object) => storeAliases.has(object.name));
+  const lines = [
+    "export function loadFixture(input: unknown): void {",
+    "  const fixture = fixtureRecord(input, \"root\");",
+    `  fixtureKeys(fixture, ${JSON.stringify(storedObjects.map((object) => object.name))}, "root");`,
+  ];
+  for (const [objectIndex, object] of storedObjects.entries()) {
+    const objectType = typeInfo.objectTypes.get(object.name)!;
+    const objectBinding = binding.objects.get(object.name)!;
+    const nextStore = `fixture_store_${objectIndex}`;
+    const rows = `fixture_rows_${objectIndex}`;
+    lines.push(`  const ${nextStore} = new Map<string, ${objectAliases.get(object.name)!}>();`);
+    lines.push(`  const ${rows} = fixture[${JSON.stringify(object.name)}];`);
+    lines.push(`  if (!Array.isArray(${rows})) throw new Error(${JSON.stringify(invalidFixtureMessage)} + ": " + ${JSON.stringify(object.name)});`);
+    lines.push(`  for (const [fixture_index, fixture_item] of ${rows}.entries()) {`);
+    lines.push(`    const fixture_row = fixtureRecord(fixture_item, ${JSON.stringify(`${object.name}[]`)});`);
+    lines.push(`    fixtureKeys(fixture_row, ${JSON.stringify(object.fields.map((field) => field.name))}, ${JSON.stringify(`${object.name}[]`)});`);
+    lines.push(`    const fixture_value: ${objectAliases.get(object.name)!} = {`);
+    for (const field of objectType.fields) {
+      const programName = objectBinding.fields.get(field.name)!.programName;
+      const label = `${object.name}[${"${fixture_index}"}].${field.name}`;
+      lines.push(`      ${JSON.stringify(programName)}: fixtureValue(fixture_row[${JSON.stringify(field.name)}], ${fixtureTypeDescriptor(field.type)}, \`${label}\`) as ${typeScriptType(field.type, objectAliases, new Map())},`);
+    }
+    lines.push("    };");
+    lines.push(`    const fixture_key = ${renderIdentityKey("fixture_value", object, objectBinding)};`);
+    lines.push(`    if (${nextStore}.has(fixture_key)) throw new Error(${JSON.stringify(invalidFixtureMessage)} + ": duplicate " + ${JSON.stringify(object.name)});`);
+    lines.push(`    ${nextStore}.set(fixture_key, fixture_value);`);
+    lines.push("  }");
+  }
+  for (const [objectIndex, object] of storedObjects.entries()) {
+    const store = storeAliases.get(object.name)!;
+    lines.push(`  ${store}.clear();`);
+    lines.push(`  for (const [fixture_key, fixture_value] of fixture_store_${objectIndex}) ${store}.set(fixture_key, fixture_value);`);
+  }
+  lines.push("}");
+  return lines;
+}
+
+function fixtureTypeDescriptor(type: TypeRef): string {
+  if (type.kind === "integer" || type.kind === "text" || type.kind === "boolean" || type.kind === "time") return `{ kind: ${JSON.stringify(type.kind)} }`;
+  if (type.kind === "money") return `{ kind: "money", currency: ${JSON.stringify(type.currency)}, unit: ${JSON.stringify(type.unit)}, scale: ${type.scale} }`;
+  if (type.kind === "value") return `{ kind: "value", values: ${JSON.stringify(type.values)} }`;
+  return "{ kind: \"unsupported\" }";
 }
 
 function generateFlow(
@@ -204,10 +304,57 @@ function generateFlow(
   }
 
   const lines = [`function ${functionName}(${params.join(", ")}): FlowResult<${outputAlias}> {`];
-  const counters = { calculation: 0, execute: 0, create: 0, query: 0 };
+  const counters = { calculation: 0, execute: 0, create: 0, query: 0, atomic: 0 };
   const emitStatements = (statements: FlowDeclaration["statements"], localSymbols: Map<string, string>, localEnvironment: Environment, indent: string): string[] => {
     const generated: string[] = [];
     for (const statement of statements) {
+      if (statement.kind === "atomic") {
+        const atomicIndex = counters.atomic++;
+        const atomicSymbols = new Map(localSymbols);
+        const atomicEnvironment = new Map(localEnvironment);
+        const stagedRoots = new Map<string, { original: string; staged: string }>();
+        for (const nested of statement.statements) {
+          if (nested.kind !== "change") continue;
+          const rootName = rootReferenceName(nested.target);
+          const original = rootName ? localSymbols.get(rootName) : undefined;
+          if (!rootName || !original || stagedRoots.has(rootName)) continue;
+          const staged = `atomic_${atomicIndex}_object_${stagedRoots.size}`;
+          generated.push(`${indent}const ${staged} = { ...${original} };`);
+          stagedRoots.set(rootName, { original, staged });
+          atomicSymbols.set(rootName, staged);
+        }
+
+        const pendingCreates: { store: string; key: string; symbol: string; objectName: string }[] = [];
+        for (const nested of statement.statements) {
+          if (nested.kind === "change") {
+            generated.push(`${indent}${renderExpression(nested.target, atomicSymbols, atomicEnvironment, binding)} = ${renderExpression(nested.expression, atomicSymbols, atomicEnvironment, binding)};`);
+            continue;
+          }
+          if (nested.kind !== "create") continue;
+          const object = program.objects.find((candidate) => candidate.name === nested.objectName)!;
+          const objectType = typeInfo.objectTypes.get(nested.objectName)!;
+          const objectBinding = binding.objects.get(nested.objectName)!;
+          const symbol = `created_${counters.create++}`;
+          generated.push(`${indent}const ${symbol}: ${objectAliases.get(nested.objectName)!} = {`);
+          for (const field of object.fields) {
+            const assignment = nested.assignments.find((candidate) => candidate.target.kind === "member" && candidate.target.property === field.name)!;
+            generated.push(`${indent}  ${JSON.stringify(objectBinding.fields.get(field.name)!.programName)}: ${renderExpression(assignment.expression, atomicSymbols, atomicEnvironment, binding)},`);
+          }
+          generated.push(`${indent}};`);
+          const store = storeAliases.get(nested.objectName)!;
+          const key = `${symbol}_key`;
+          generated.push(`${indent}const ${key} = ${renderIdentityKey(symbol, object, objectBinding)};`);
+          const priorKeys = pendingCreates.filter((pending) => pending.objectName === nested.objectName).map((pending) => `${pending.key} === ${key}`);
+          const pendingConflict = priorKeys.length > 0 ? ` || ${priorKeys.join(" || ")}` : "";
+          generated.push(`${indent}if (${store}.has(${key})${pendingConflict}) return { ok: false, error: ${JSON.stringify(nested.failureMessage)} };`);
+          pendingCreates.push({ store, key, symbol, objectName: nested.objectName });
+          atomicSymbols.set(nested.name, symbol);
+          atomicEnvironment.set(nested.name, objectType);
+        }
+        for (const { original, staged } of stagedRoots.values()) generated.push(`${indent}Object.assign(${original}, ${staged});`);
+        for (const pending of pendingCreates) generated.push(`${indent}${pending.store}.set(${pending.key}, ${pending.symbol});`);
+        continue;
+      }
       if (statement.kind === "conditional") {
         generated.push(`${indent}if (${renderExpression(statement.condition, localSymbols, localEnvironment, binding)}) {`);
         generated.push(...emitStatements(statement.statements, new Map(localSymbols), new Map(localEnvironment), `${indent}  `));
@@ -448,6 +595,12 @@ function renderIdentityKey(
 ): string {
   const values = object.identityFields.map((field) => `${expression}[${JSON.stringify(objectBinding.fields.get(field)!.programName)}]`);
   return `JSON.stringify([${values.join(", ")}])`;
+}
+
+function rootReferenceName(expression: Expression): string | null {
+  let current = expression;
+  while (current.kind === "member") current = current.object;
+  return current.kind === "reference" ? current.name : null;
 }
 
 function renderExpression(expression: Expression, symbols: ReadonlyMap<string, string>, environment: Environment, binding: ResolvedBinding): string {

@@ -21,16 +21,20 @@ const hostIndex = options.indexOf("--host");
 const host = hostIndex >= 0 ? options[hostIndex + 1] : "127.0.0.1";
 const portIndex = options.indexOf("--port");
 const port = Number(portIndex >= 0 ? options[portIndex + 1] : "3000");
+const fixtureIndex = options.indexOf("--fixture");
+const fixturePath = fixtureIndex >= 0 ? options[fixtureIndex + 1] : null;
+const clockIndex = options.indexOf("--clock");
+const clockValue = clockIndex >= 0 ? options[clockIndex + 1] : null;
 
 if (!language) {
   console.error(`Unsupported language: ${languageValue}. Use en or zh-CN.`);
   process.exit(1);
 }
 
-if (!sourcePath || (outIndex >= 0 && !outputPath) || (bindingIndex >= 0 && !bindingPath) || (languageIndex >= 0 && !languageValue) || (runMode && (!host || !Number.isInteger(port) || port < 0 || port > 65535))) {
+if (!sourcePath || (outIndex >= 0 && !outputPath) || (bindingIndex >= 0 && !bindingPath) || (languageIndex >= 0 && !languageValue) || (fixtureIndex >= 0 && !fixturePath) || (clockIndex >= 0 && !clockValue) || (!runMode && (fixtureIndex >= 0 || clockIndex >= 0)) || (runMode && (!host || !Number.isInteger(port) || port < 0 || port > 65535))) {
   console.error(language === "zh-CN"
-    ? "用法：determinant <source.aal> [--language en|zh-CN] [--binding binding.json] [--out generated.ts]\n      determinant run <source.aal> [--host 127.0.0.1] [--port 3000] [--language en|zh-CN] [--binding binding.json]"
-    : "Usage: determinant <source.aal> [--language en|zh-CN] [--binding binding.json] [--out generated.ts]\n       determinant run <source.aal> [--host 127.0.0.1] [--port 3000] [--language en|zh-CN] [--binding binding.json]");
+    ? "用法：determinant <source.aal> [--language en|zh-CN] [--binding binding.json] [--out generated.ts]\n      determinant run <source.aal> [--host 127.0.0.1] [--port 3000] [--language en|zh-CN] [--binding binding.json] [--fixture fixture.json] [--clock 2026-01-01T00:00:00.000Z]"
+    : "Usage: determinant <source.aal> [--language en|zh-CN] [--binding binding.json] [--out generated.ts]\n       determinant run <source.aal> [--host 127.0.0.1] [--port 3000] [--language en|zh-CN] [--binding binding.json] [--fixture fixture.json] [--clock 2026-01-01T00:00:00.000Z]");
   process.exit(1);
 }
 
@@ -60,6 +64,21 @@ if (runMode) {
   }).outputText;
   const moduleUrl = `data:text/javascript;base64,${Buffer.from(javascript).toString("base64")}`;
   const application = await import(moduleUrl);
+  if (clockValue && (!Number.isFinite(Date.parse(clockValue)) || new Date(clockValue).toISOString() !== clockValue)) {
+    console.error(language === "zh-CN" ? `冻结时钟必须是规范 UTC 时间：${clockValue}` : `Frozen clock must be a canonical UTC instant: ${clockValue}`);
+    process.exit(1);
+  }
+  if (fixturePath) {
+    try {
+      const fixture = JSON.parse(await readFile(resolve(fixturePath), "utf8"));
+      if (typeof application.loadFixture !== "function") throw new Error(language === "zh-CN" ? "应用没有可加载的对象存储" : "The application has no fixture-capable object stores");
+      application.loadFixture(fixture);
+    } catch (cause) {
+      console.error(cause instanceof Error ? cause.message : String(cause));
+      process.exit(1);
+    }
+  }
+  const runtimeContext = clockValue ? { now: () => clockValue } : undefined;
   const server = createServer(async (request, response) => {
     try {
       const body = await readJsonBody(request);
@@ -67,7 +86,7 @@ if (runMode) {
         sendJson(response, 400, { error: language === "zh-CN" ? "JSON 格式无效" : "Invalid JSON" });
         return;
       }
-      const handled = application.handleHttpRequest({ method: request.method ?? "", path: request.url ?? "/", body: body.value });
+      const handled = application.handleHttpRequest({ method: request.method ?? "", path: request.url ?? "/", body: body.value }, runtimeContext);
       sendJson(response, handled.status, handled.body);
     } catch {
       sendJson(response, 500, { error: language === "zh-CN" ? "服务器内部错误" : "Internal server error" });

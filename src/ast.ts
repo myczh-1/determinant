@@ -147,7 +147,7 @@ export interface FlowInput {
   readonly loc: SourceLocation;
 }
 
-export type Statement = IfStatement | ConditionalStatement | CalculateStatement | ChangeStatement | ExecuteStatement | CreateStatement | QueryStatement | DeleteStatement;
+export type Statement = IfStatement | ConditionalStatement | AtomicStatement | CalculateStatement | ChangeStatement | ExecuteStatement | CreateStatement | QueryStatement | DeleteStatement;
 
 export interface IfStatement {
   readonly kind: "if";
@@ -159,6 +159,12 @@ export interface IfStatement {
 export interface ConditionalStatement {
   readonly kind: "conditional";
   readonly condition: Expression;
+  readonly statements: readonly Statement[];
+  readonly loc: SourceLocation;
+}
+
+export interface AtomicStatement {
+  readonly kind: "atomic";
   readonly statements: readonly Statement[];
   readonly loc: SourceLocation;
 }

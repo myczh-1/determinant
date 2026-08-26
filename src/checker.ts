@@ -184,6 +184,13 @@ function checkFlow(flow: FlowDeclaration, program: Program, typeInfo: ProgramTyp
 
   const checkStatements = (statements: readonly Statement[], environment: Environment, storedObjectNames: Set<string>): void => {
     for (const statement of statements) {
+    if (statement.kind === "atomic") {
+      for (const nested of statement.statements) {
+        if (nested.kind !== "create" && nested.kind !== "change") diagnostics.push(error("同时生效当前只允许创建和改变", nested.loc));
+      }
+      checkStatements(statement.statements, new Map(environment), new Set(storedObjectNames));
+      continue;
+    }
     if (statement.kind === "conditional") {
       const conditionType = inferExpressionType(statement.condition, environment, diagnostics);
       if (conditionType && conditionType.kind !== "boolean") diagnostics.push(error("条件业务步骤必须使用布尔条件", statement.condition.loc));
@@ -406,6 +413,7 @@ function collectStatementFailures(statements: readonly Statement[], program: Pro
   for (const statement of statements) {
     if (statement.kind === "if" || statement.kind === "create" || statement.kind === "query") failures.add(statement.failureMessage);
     if (statement.kind === "conditional") for (const message of collectStatementFailures(statement.statements, program, visiting)) failures.add(message);
+    if (statement.kind === "atomic") for (const message of collectStatementFailures(statement.statements, program, visiting)) failures.add(message);
     if (statement.kind === "execute") {
       const called = program.flows.find((candidate) => candidate.name === statement.flowName);
       if (called) for (const message of collectFlowFailures(called, program, visiting)) failures.add(message);

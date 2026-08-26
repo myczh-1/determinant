@@ -397,6 +397,14 @@ function parseFlowStatement(lines: SourceLine[], start: number, expectedIndent: 
     const parsed = parseIf(lines, start, diagnostics);
     return { statements: parsed.statement ? [parsed.statement] : [], nextIndex: parsed.nextIndex };
   }
+  if (line.content === "同时生效：") {
+    const block = parseStatementBlock(lines, start + 1, expectedIndent + 4, diagnostics);
+    if (block.statements.length === 0) diagnostics.push(error("同时生效至少需要一个业务步骤", lineLocation(line)));
+    return {
+      statements: block.statements.length > 0 ? [{ kind: "atomic", statements: block.statements, loc: lineLocation(line) }] : [],
+      nextIndex: block.nextIndex,
+    };
+  }
   if (line.content === "计算：" || line.content === "改变：") {
     const parsed = parseAssignments(lines, start + 1, expectedIndent + 4, line.content === "计算：" ? "计算" : "改变", diagnostics);
     const statements = line.content === "计算："
