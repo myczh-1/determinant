@@ -9,7 +9,8 @@ import test, { beforeEach } from "node:test";
 import { compileAAL, formatDiagnostic } from "../dist/index.js";
 
 const language = "zh-CN";
-const source = readFileSync(new URL("../examples/order-refund/app.zh-CN.aal", import.meta.url), "utf8");
+const sourcePath = process.env.DETERMINANT_ORDER_REFUND_AAL ?? "examples/order-refund/app.zh-CN.aal";
+const source = readFileSync(new URL(`../${sourcePath}`, import.meta.url), "utf8");
 const fixtureBytes = readFileSync(new URL("../examples/order-refund/fixture.v1.json", import.meta.url));
 const fixtureDigest = `sha256:${createHash("sha256").update(fixtureBytes).digest("hex")}`;
 const baseFixture = JSON.parse(fixtureBytes.toString("utf8"));
@@ -237,7 +238,7 @@ test("real HTTP shell uses the frozen fixture, clock, and invalid-JSON contract"
   const child = spawn(process.execPath, [
     "bin/determinant.mjs",
     "run",
-    "examples/order-refund/app.zh-CN.aal",
+    sourcePath,
     "--language",
     "zh-CN",
     "--host",

@@ -32,9 +32,10 @@ Both dialects enter the same AST, checker, Binding resolver, and code generator.
 4. Do not invent fields, types, currencies, units, precision, permissions, retries, concurrency, rollback, rounding, or failure behavior.
 5. Give every object field and flow input an explicit type.
 6. Use `change` for real state mutation. A calculation alone does not change an object.
-7. Compose flows explicitly with `execute`, `use`, and `get`.
-8. Ask the user when the business requirement is ambiguous.
-9. Stop changing business meaning after the user confirms the AAL.
+7. Let each state-changing flow describe one indivisible business outcome; do not split a business transaction by technical stages such as query, validation, and database writes.
+8. Compose flows explicitly with `execute`, `use`, and `get`.
+9. Ask the user when the business requirement is ambiguous.
+10. Stop changing business meaning after the user confirms the AAL.
 
 ## Source file structure
 
@@ -163,6 +164,22 @@ flow: DeductInventory
 ```
 
 Every flow must have an `output` section. An `if` condition must be Boolean. Its body may contain one explicit `failure` or nested business steps. A failed executed flow propagates the same failure to its containing flow.
+
+### Atomic-flow principle
+
+A flow that changes business state should correspond to one complete outcome that can independently answer “success or failure.” For example, `RefundOrder` is a flow; querying the order, validating the amount, and writing inventory are internal steps rather than three flows shaped around program structure.
+
+The target semantics of an atomic flow are:
+
+1. queries, requirements, and failures run in source order;
+2. later steps can observe changes made earlier in the same flow;
+3. all creates, changes, and deletes become externally visible together when the flow succeeds;
+4. any failure leaves no partial state change from that flow;
+5. separate flows are used only for outcomes the business allows to succeed or fail independently.
+
+AI should not generate begin-transaction, commit, rollback, or compensation code. It should place the complete business outcome in one flow and leave atomic commit to the language and runtime.
+
+The current P0 compiler provides this guarantee only inside an explicit `atomic` block; it does not yet make every flow a general transaction boundary. This principle is therefore both an authoring rule and a candidate semantic for the next language revision. Stable AAL that requires a real atomic guarantee must retain `atomic` until flow-level atomic commit is implemented.
 
 ## Calculations and state changes
 
