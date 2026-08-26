@@ -32,7 +32,7 @@ Both dialects enter the same AST, checker, Binding resolver, and code generator.
 4. Do not invent fields, types, currencies, units, precision, permissions, retries, concurrency, rollback, rounding, or failure behavior.
 5. Give every object field and flow input an explicit type.
 6. Use `change` for real state mutation. A calculation alone does not change an object.
-7. Let each state-changing flow describe one indivisible business outcome; do not split a business transaction by technical stages such as query, validation, and database writes.
+7. Prefer small, single-purpose, composable flows. A flow should usually express one business action or decision that can be named in natural language.
 8. Compose flows explicitly with `execute`, `use`, and `get`.
 9. Ask the user when the business requirement is ambiguous.
 10. Stop changing business meaning after the user confirms the AAL.
@@ -167,19 +167,29 @@ Every flow must have an `output` section. An `if` condition must be Boolean. Its
 
 ### Atomic-flow principle
 
-A flow that changes business state should correspond to one complete outcome that can independently answer “success or failure.” For example, `RefundOrder` is a flow; querying the order, validating the amount, and writing inventory are internal steps rather than three flows shaped around program structure.
+Here, “atomic” means a small audit responsibility. It does not mean transaction atomicity, and it does not mean that every flow becomes an HTTP entry.
 
-The target semantics of an atomic flow are:
+When one flow combines several independently nameable responsibilities—such as querying context, deciding eligibility, validating an amount, calculating results, and changing state—AI should prefer small flows composed by one business-level orchestration flow. For example:
 
-1. queries, requirements, and failures run in source order;
-2. later steps can observe changes made earlier in the same flow;
-3. all creates, changes, and deletes become externally visible together when the flow succeeds;
-4. any failure leaves no partial state change from that flow;
-5. separate flows are used only for outcomes the business allows to succeed or fail independently.
+```text
+RefundOrder
+├── GetRefundContext
+├── CheckRefundEligibility
+├── CheckRefundAmount
+└── ExecuteRefund
+```
 
-AI should not generate begin-transaction, commit, rollback, or compensation code. It should place the complete business outcome in one flow and leave atomic commit to the language and runtime.
+Each extracted flow should:
 
-The current P0 compiler provides this guarantee only inside an explicit `atomic` block; it does not yet make every flow a general transaction boundary. This principle is therefore both an authoring rule and a candidate semantic for the next language revision. Stable AAL that requires a real atomic guarantee must retain `atomic` until flow-level atomic commit is implemented.
+1. have a name that directly states one business action or decision;
+2. use business data as inputs and outputs, never database connections, framework objects, or exception structures;
+3. keep failures with the flow responsible for that decision;
+4. leave the main flow focused on execution order and composition;
+5. avoid mechanically wrapping a simple expression or creating a flow with no independent audit value.
+
+The first review expands all relevant small flows. Later changes can focus primarily on the changed flow and its call relationships. HTTP entries normally target orchestration flows; internal small flows are not exposed externally.
+
+Atomic audit responsibility and atomic state commit are different concerns. When several state changes must commit together, retain an explicit `atomic` block even after splitting the behavior into smaller flows.
 
 ## Calculations and state changes
 
