@@ -14,6 +14,7 @@ import {
   type IfStatement,
   type HttpEntryDeclaration,
   type HttpFieldMapping,
+  type MoneyLiteral,
   type ObjectDeclaration,
   type OutputField,
   type Program,
@@ -22,6 +23,7 @@ import {
   type Statement,
   type TypeField,
   type TypeRef,
+  type ValueSetDeclaration,
 } from "./ast.js";
 import { error, type Diagnostic } from "./diagnostics.js";
 import { DEFAULT_LANGUAGE, localizeDiagnostics, normalizeAALSource, type AALLanguage } from "./language.js";
@@ -34,7 +36,7 @@ interface SourceLine {
 }
 
 interface Token {
-  readonly kind: "number" | "identifier" | "operator" | "left-paren" | "right-paren";
+  readonly kind: "number" | "money" | "identifier" | "operator" | "left-paren" | "right-paren";
   readonly value: string;
   readonly column: number;
 }
@@ -102,7 +104,18 @@ class ExpressionParser {
     }
 
     let expression: Expression;
-    if (token.kind === "number") {
+    if (token.kind === "money") {
+      this.index += 1;
+      const match = /^(\d+\.\d{2})\s*(元|美元)$/u.exec(token.value)!;
+      expression = {
+        kind: "money-literal",
+        value: match[1],
+        currency: match[2] === "元" ? "CNY" : "USD",
+        unit: match[2] === "元" ? "yuan" : "dollar",
+        scale: 2,
+        loc: location(this.line, token.column),
+      } satisfies MoneyLiteral;
+    } else if (token.kind === "number") {
       this.index += 1;
       expression = { kind: "integer-literal", value: Number(token.value), loc: location(this.line, token.column) };
     } else if (token.kind === "identifier") {
@@ -177,6 +190,7 @@ function parseCanonicalAAL(source: string): ParseResult {
   const applicationName = first.content.slice("应用：".length).trim();
   if (!isIdentifier(applicationName)) diagnostics.push(error("应用名称必须是非空标识符", location(first.number, 4)));
 
+  const valueSets: ValueSetDeclaration[] = [];
   const objects: ObjectDeclaration[] = [];
   const flows: FlowDeclaration[] = [];
   const httpEntries: HttpEntryDeclaration[] = [];
@@ -190,6 +204,12 @@ function parseCanonicalAAL(source: string): ParseResult {
     if (line.indent !== 0) {
       diagnostics.push(error("顶层声明必须从第 1 列开始", location(line.number, line.indent + 1)));
       index += 1;
+      continue;
+    }
+    if (line.content.startsWith("取值：")) {
+      const parsed = parseValueSet(lines, index, diagnostics);
+      if (parsed.valueSet) valueSets.push(parsed.valueSet);
+      index = parsed.nextIndex;
       continue;
     }
     if (line.content.startsWith("对象：")) {
@@ -216,9 +236,27 @@ function parseCanonicalAAL(source: string): ParseResult {
   if (objects.length === 0) diagnostics.push(error("程序必须至少声明一个对象", location(first.number, 1)));
   if (flows.length === 0) diagnostics.push(error("程序必须至少声明一个流程", location(first.number, 1)));
   return {
-    program: { kind: "program", name: applicationName, objects, flows, httpEntries, loc: location(first.number, 1) },
+    program: { kind: "program", name: applicationName, valueSets, objects, flows, httpEntries, loc: location(first.number, 1) },
     diagnostics,
   };
+}
+
+function parseValueSet(lines: SourceLine[], start: number, diagnostics: Diagnostic[]): { valueSet: ValueSetDeclaration | null; nextIndex: number } {
+  const header = lines[start];
+  const name = header.content.slice("取值：".length).trim();
+  if (!isIdentifier(name)) {
+    diagnostics.push(error("取值名称必须是标识符", location(header.number, 4)));
+    return { valueSet: null, nextIndex: start + 1 };
+  }
+  const parsed = parseNameList(lines, start + 1, 4, "取值", diagnostics);
+  const values = parsed.items.flatMap((item) => {
+    if (!isIdentifier(item.text)) {
+      diagnostics.push(error("取值成员必须是标识符", location(item.line, item.column)));
+      return [];
+    }
+    return [{ name: item.text, loc: location(item.line, item.column) }];
+  });
+  return { valueSet: { kind: "value-set", name, values, loc: location(header.number, 1) }, nextIndex: parsed.nextIndex };
 }
 
 function parseObject(lines: SourceLine[], start: number, diagnostics: Diagnostic[]): { object: ObjectDeclaration | null; nextIndex: number } {
@@ -756,8 +794,8 @@ function parseType(text: string, line: SourceLine, column: number, diagnostics: 
     const unit = declaredUnit === "元" ? "yuan" : declaredUnit === "美元" ? "dollar" : declaredUnit || defaultUnit;
     return { kind: "money", currency, unit, scale: 2 };
   }
-  if (isIdentifier(text)) return { kind: "object", name: text, fields: [] };
-  diagnostics.push(error("类型必须是整数、文本、布尔、人民币金额、美元金额或对象名称", location(line.number, column)));
+  if (isIdentifier(text)) return { kind: "named", name: text };
+  diagnostics.push(error("类型必须是整数、文本、布尔、人民币金额、美元金额、取值名称或对象名称", location(line.number, column)));
   return null;
 }
 
@@ -775,6 +813,12 @@ function tokenize(text: string, line: number, column: number, diagnostics: Diagn
       continue;
     }
     const tokenColumn = column + index;
+    const money = /^\d+\.\d{2}\s*(?:元|美元)/u.exec(text.slice(index));
+    if (money) {
+      tokens.push({ kind: "money", value: money[0], column: tokenColumn });
+      index += money[0].length;
+      continue;
+    }
     const number = /^\d+/.exec(text.slice(index));
     if (number) {
       tokens.push({ kind: "number", value: number[0], column: tokenColumn });

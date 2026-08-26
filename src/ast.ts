@@ -3,7 +3,7 @@ export interface SourceLocation {
   readonly column: number;
 }
 
-export type TypeRef = IntegerType | TextType | BooleanType | MoneyType | ObjectType | RecordType | UnknownType;
+export type TypeRef = IntegerType | TextType | BooleanType | MoneyType | ValueType | NamedType | ObjectType | RecordType | UnknownType;
 
 export interface IntegerType { readonly kind: "integer"; }
 export interface TextType { readonly kind: "text"; }
@@ -14,6 +14,17 @@ export interface MoneyType {
   readonly currency: string;
   readonly unit: string;
   readonly scale: number;
+}
+
+export interface ValueType {
+  readonly kind: "value";
+  readonly name: string;
+  readonly values: readonly string[];
+}
+
+export interface NamedType {
+  readonly kind: "named";
+  readonly name: string;
 }
 
 export interface ObjectType {
@@ -36,11 +47,20 @@ export interface TypeField {
   readonly loc?: SourceLocation;
 }
 
-export type Expression = IntegerLiteral | ReferenceExpression | MemberExpression | BinaryExpression;
+export type Expression = IntegerLiteral | MoneyLiteral | ReferenceExpression | MemberExpression | BinaryExpression;
 
 export interface IntegerLiteral {
   readonly kind: "integer-literal";
   readonly value: number;
+  readonly loc: SourceLocation;
+}
+
+export interface MoneyLiteral {
+  readonly kind: "money-literal";
+  readonly value: string;
+  readonly currency: string;
+  readonly unit: string;
+  readonly scale: number;
   readonly loc: SourceLocation;
 }
 
@@ -68,9 +88,22 @@ export interface BinaryExpression {
 export interface Program {
   readonly kind: "program";
   readonly name: string;
+  readonly valueSets: readonly ValueSetDeclaration[];
   readonly objects: readonly ObjectDeclaration[];
   readonly flows: readonly FlowDeclaration[];
   readonly httpEntries: readonly HttpEntryDeclaration[];
+  readonly loc: SourceLocation;
+}
+
+export interface ValueSetDeclaration {
+  readonly kind: "value-set";
+  readonly name: string;
+  readonly values: readonly ValueMember[];
+  readonly loc: SourceLocation;
+}
+
+export interface ValueMember {
+  readonly name: string;
   readonly loc: SourceLocation;
 }
 

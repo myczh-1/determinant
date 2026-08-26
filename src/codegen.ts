@@ -66,12 +66,17 @@ export function generateTypeScript(program: Program, bindingInput?: BindingSpec 
     "  return value as Record<string, unknown>;",
     "}",
     "",
-    "function readHttpInput(value: unknown, kind: \"integer\" | \"text\" | \"boolean\", fromPath: boolean): { readonly ok: true; readonly value: unknown } | { readonly ok: false } {",
+    "function readHttpInput(value: unknown, kind: \"integer\" | \"text\" | \"boolean\" | \"money\", fromPath: boolean, currency?: string, unit?: string, scale?: number): { readonly ok: true; readonly value: unknown } | { readonly ok: false } {",
     "  if (kind === \"integer\") {",
     "    const parsed = fromPath && typeof value === \"string\" && /^-?(?:0|[1-9]\\d*)$/.test(value) ? Number(value) : value;",
     "    return Number.isSafeInteger(parsed) ? { ok: true, value: parsed } : { ok: false };",
     "  }",
     "  if (kind === \"text\") return typeof value === \"string\" ? { ok: true, value } : { ok: false };",
+    "  if (kind === \"money\") {",
+    "    if (fromPath || typeof value !== \"string\" || currency === undefined || unit === undefined || scale === undefined) return { ok: false };",
+    "    const pattern = new RegExp(`^-?(?:0|[1-9]\\\\d*)\\\\.\\\\d{${scale}}$`);",
+    "    return pattern.test(value) ? { ok: true, value: money(currency, unit, scale, value) } : { ok: false };",
+    "  }",
     "  if (fromPath && (value === \"true\" || value === \"false\")) return { ok: true, value: value === \"true\" };",
     "  return typeof value === \"boolean\" ? { ok: true, value } : { ok: false };",
     "}",
@@ -161,6 +166,12 @@ function generateFlow(
   const params: string[] = [];
   const symbols = new Map<string, string>();
   const environment: Environment = new Map();
+  for (const valueType of typeInfo.valueTypes.values()) {
+    for (const value of valueType.values) {
+      symbols.set(value, JSON.stringify(value));
+      environment.set(value, valueType);
+    }
+  }
   for (const [index, input] of signature.inputs.entries()) {
     const symbol = `input_${index}`;
     params.push(`${symbol}: ${typeScriptType(input.type, objectAliases, outputAliases)}`);
@@ -324,7 +335,10 @@ function generateHttp(
         ? `${match}[${route.parameters.indexOf(pathMapping.sourceName) + 1}]`
         : `requestBody[${JSON.stringify(bodyMapping!.sourceName)}]`;
       const parsed = `http_input_${entryIndex}_${inputIndex}`;
-      lines.push(`    const ${parsed} = readHttpInput(${raw}, ${JSON.stringify(input.type.kind)}, ${pathMapping ? "true" : "false"});`);
+      const moneyArguments = input.type.kind === "money"
+        ? `, ${JSON.stringify(input.type.currency)}, ${JSON.stringify(input.type.unit)}, ${input.type.scale}`
+        : "";
+      lines.push(`    const ${parsed} = readHttpInput(${raw}, ${JSON.stringify(input.type.kind)}, ${pathMapping ? "true" : "false"}${moneyArguments});`);
       lines.push(`    if (!${parsed}.ok) return { status: 400, body: { error: ${JSON.stringify(messages.invalidRequest)} } };`);
       parsedSymbols.set(input.name, `${parsed}.value as ${typeScriptType(input.type, objectAliases, outputAliases)}`);
     }
@@ -373,7 +387,7 @@ function escapeRegExp(value: string): string {
 }
 
 function serializeAuditValue(expression: string, type: TypeRef, binding: ResolvedBinding): string {
-  if (type.kind === "money") return `{ currency: ${expression}.currency, unit: ${expression}.unit, scale: ${expression}.scale, value: moneyValue(${expression}) }`;
+  if (type.kind === "money") return `moneyValue(${expression})`;
   if (type.kind === "object") {
     const objectBinding = binding.objects.get(type.name)!;
     const fields = type.fields.map((field) => {
@@ -396,6 +410,7 @@ function renderIdentityKey(
 
 function renderExpression(expression: Expression, symbols: ReadonlyMap<string, string>, environment: Environment, binding: ResolvedBinding): string {
   if (expression.kind === "integer-literal") return String(expression.value);
+  if (expression.kind === "money-literal") return `money(${JSON.stringify(expression.currency)}, ${JSON.stringify(expression.unit)}, ${expression.scale}, ${JSON.stringify(expression.value)})`;
   if (expression.kind === "reference") return symbols.get(expression.name) ?? "undefined";
   if (expression.kind === "member") {
     const containerType = inferExpressionType(expression.object, environment);
@@ -428,6 +443,8 @@ function typeScriptType(type: TypeRef, objectAliases: ReadonlyMap<string, string
   if (type.kind === "text") return "string";
   if (type.kind === "boolean") return "boolean";
   if (type.kind === "money") return "Money";
+  if (type.kind === "value") return type.values.map((value) => JSON.stringify(value)).join(" | ") || "never";
+  if (type.kind === "named") return "unknown";
   if (type.kind === "object") return objectAliases.get(type.name) ?? "Record<string, unknown>";
   if (type.kind === "record") return outputAliases.get(type.name) ?? "Record<string, unknown>";
   return "unknown";

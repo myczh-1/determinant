@@ -12,6 +12,7 @@ import {
   type RecordType,
   type TypeField,
   type TypeRef,
+  type ValueType,
 } from "./ast.js";
 import { error, type Diagnostic } from "./diagnostics.js";
 import { DEFAULT_LANGUAGE, localizeDiagnostics, type AALLanguage } from "./language.js";
@@ -19,6 +20,7 @@ import { DEFAULT_LANGUAGE, localizeDiagnostics, type AALLanguage } from "./langu
 export type Environment = Map<string, TypeRef>;
 
 export interface ProgramTypeInfo {
+  readonly valueTypes: ReadonlyMap<string, ValueType>;
   readonly objectTypes: ReadonlyMap<string, ObjectType>;
   readonly flowSignatures: ReadonlyMap<string, FlowSignature>;
 }
@@ -26,13 +28,17 @@ export interface ProgramTypeInfo {
 export function checkAAL(program: Program, language: AALLanguage = DEFAULT_LANGUAGE): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
   const typeInfo = createProgramTypeInfo(program);
-  checkDeclarations(program.objects, typeInfo, diagnostics);
+  checkDeclarations(program, typeInfo, diagnostics);
   checkFlows(program, typeInfo, diagnostics);
   checkHttpEntries(program, typeInfo, diagnostics);
   return localizeDiagnostics(diagnostics, language);
 }
 
 export function createProgramTypeInfo(program: Program): ProgramTypeInfo {
+  const valueTypes = new Map<string, ValueType>();
+  for (const valueSet of program.valueSets) {
+    valueTypes.set(valueSet.name, { kind: "value", name: valueSet.name, values: valueSet.values.map((value) => value.name) });
+  }
   const objectTypes = new Map<string, ObjectType>();
   for (const object of program.objects) {
     objectTypes.set(object.name, { kind: "object", name: object.name, fields: [] });
@@ -44,7 +50,7 @@ export function createProgramTypeInfo(program: Program): ProgramTypeInfo {
       name: object.name,
       fields: object.fields.map((field) => ({
         ...field,
-        type: resolveTypeWithoutDiagnostics(field.type, objectTypes),
+        type: resolveTypeWithoutDiagnostics(field.type, objectTypes, valueTypes),
       })),
     });
   }
@@ -55,7 +61,7 @@ export function createProgramTypeInfo(program: Program): ProgramTypeInfo {
       name: flow.name,
       inputs: flow.inputs.map((input) => ({
         ...input,
-        type: resolveTypeWithoutDiagnostics(input.type, objectTypes),
+        type: resolveTypeWithoutDiagnostics(input.type, objectTypes, valueTypes),
       })),
       output: {
         kind: "record",
@@ -69,20 +75,21 @@ export function createProgramTypeInfo(program: Program): ProgramTypeInfo {
     });
   }
 
-  populateOutputTypes(program.flows, flowSignatures, objectTypes);
+  populateOutputTypes(program.flows, flowSignatures, objectTypes, valueTypes);
 
-  return { objectTypes, flowSignatures };
+  return { valueTypes, objectTypes, flowSignatures };
 }
 
 function populateOutputTypes(
   flows: readonly FlowDeclaration[],
   signatures: Map<string, FlowSignature>,
   objects: ReadonlyMap<string, ObjectType>,
+  valueTypes: ReadonlyMap<string, ValueType>,
 ): void {
   for (let pass = 0; pass < Math.max(1, flows.length); pass += 1) {
     for (const flow of flows) {
-      const environment: Environment = new Map();
-      for (const input of flow.inputs) environment.set(input.name, resolveTypeWithoutDiagnostics(input.type, objects));
+      const environment = createValueEnvironment(valueTypes);
+      for (const input of flow.inputs) environment.set(input.name, resolveTypeWithoutDiagnostics(input.type, objects, valueTypes));
       for (const statement of flow.statements) {
         if (statement.kind === "calculate") {
           const type = inferExpressionType(statement.expression, environment);
@@ -115,17 +122,33 @@ function populateOutputTypes(
   }
 }
 
-function checkDeclarations(objects: readonly ObjectDeclaration[], typeInfo: ProgramTypeInfo, diagnostics: Diagnostic[]): void {
+function checkDeclarations(program: Program, typeInfo: ProgramTypeInfo, diagnostics: Diagnostic[]): void {
+  const declarationNames = new Set<string>();
+  const valueMembers = new Set<string>();
+  for (const valueSet of program.valueSets) {
+    if (declarationNames.has(valueSet.name)) diagnostics.push(error(`取值重复声明：${valueSet.name}`, valueSet.loc));
+    declarationNames.add(valueSet.name);
+    const localMembers = new Set<string>();
+    for (const value of valueSet.values) {
+      if (localMembers.has(value.name)) diagnostics.push(error(`取值 ${valueSet.name} 的成员重复：${value.name}`, value.loc));
+      localMembers.add(value.name);
+      if (valueMembers.has(value.name)) diagnostics.push(error(`取值成员必须在应用内唯一：${value.name}`, value.loc));
+      valueMembers.add(value.name);
+    }
+  }
   const objectNames = new Set<string>();
-  for (const object of objects) {
+  for (const object of program.objects) {
     if (objectNames.has(object.name)) diagnostics.push(error(`对象重复声明：${object.name}`, object.loc));
+    if (declarationNames.has(object.name)) diagnostics.push(error(`顶层类型名称重复：${object.name}`, object.loc));
+    declarationNames.add(object.name);
     objectNames.add(object.name);
-    checkFields(object.fields, `对象 ${object.name} 的字段`, typeInfo.objectTypes, diagnostics);
+    checkFields(object.fields, `对象 ${object.name} 的字段`, typeInfo, diagnostics);
     const identityNames = new Set<string>();
+    const resolvedObject = typeInfo.objectTypes.get(object.name);
     for (const identity of object.identityFields) {
       if (identityNames.has(identity)) diagnostics.push(error(`对象 ${object.name} 的身份字段重复：${identity}`, object.loc));
       identityNames.add(identity);
-      const field = object.fields.find((candidate) => candidate.name === identity);
+      const field = resolvedObject?.fields.find((candidate) => candidate.name === identity);
       if (!field) diagnostics.push(error(`对象 ${object.name} 的身份引用了未声明字段：${identity}`, object.loc));
       else if (!["integer", "text", "boolean"].includes(field.type.kind)) diagnostics.push(error(`对象 ${object.name} 的身份字段必须是整数、文本或布尔：${identity}`, field.loc ?? object.loc));
     }
@@ -145,14 +168,15 @@ function checkFlow(flow: FlowDeclaration, program: Program, typeInfo: ProgramTyp
   const signature = typeInfo.flowSignatures.get(flow.name);
   if (!signature) return;
 
-  const environment: Environment = new Map();
+  const environment = createValueEnvironment(typeInfo.valueTypes);
   const storedObjectNames = new Set<string>();
   const inputNames = new Set<string>();
   for (const input of flow.inputs) {
     if (inputNames.has(input.name)) diagnostics.push(error(`流程 ${flow.name} 的输入重复声明：${input.name}`, input.loc));
+    if (environment.has(input.name)) diagnostics.push(error(`流程输入名称不能与取值成员相同：${input.name}`, input.loc));
     inputNames.add(input.name);
-    resolveType(input.type, typeInfo.objectTypes, diagnostics, input.loc);
-    environment.set(input.name, resolveTypeWithoutDiagnostics(input.type, typeInfo.objectTypes));
+    resolveType(input.type, typeInfo.objectTypes, typeInfo.valueTypes, diagnostics, input.loc);
+    environment.set(input.name, resolveTypeWithoutDiagnostics(input.type, typeInfo.objectTypes, typeInfo.valueTypes));
   }
 
   for (const statement of flow.statements) {
@@ -269,7 +293,7 @@ function checkFlow(flow: FlowDeclaration, program: Program, typeInfo: ProgramTyp
       }
       for (let index = 0; index < Math.min(called.inputs.length, statement.inputs.length); index += 1) {
         const actual = inferExpressionType(statement.inputs[index], environment, diagnostics);
-        const expected = resolveTypeWithoutDiagnostics(called.inputs[index].type, typeInfo.objectTypes);
+        const expected = resolveTypeWithoutDiagnostics(called.inputs[index].type, typeInfo.objectTypes, typeInfo.valueTypes);
         if (actual && !areSameType(actual, expected)) {
           diagnostics.push(error(`流程输入 ${called.inputs[index].name} 类型不匹配：需要 ${describeType(expected)}，实际是 ${describeType(actual)}`, statement.inputs[index].loc));
         }
@@ -322,7 +346,8 @@ function checkHttpEntries(program: Program, typeInfo: ProgramTypeInfo, diagnosti
       targetNames.add(mapping.targetName);
       const input = signature.inputs.find((candidate) => candidate.name === mapping.targetName);
       if (!input) diagnostics.push(error(`HTTP 映射引用了未声明的流程输入：${mapping.targetName}`, mapping.loc));
-      else if (!["integer", "text", "boolean"].includes(input.type.kind)) diagnostics.push(error(`HTTP MVP 输入暂不支持类型：${describeType(input.type)}`, mapping.loc));
+      else if (input.type.kind === "money" && entry.pathMappings.includes(mapping)) diagnostics.push(error("HTTP 路径参数不能使用金额类型", mapping.loc));
+      else if (!["integer", "text", "boolean", "money"].includes(input.type.kind)) diagnostics.push(error(`HTTP 输入暂不支持类型：${describeType(input.type)}`, mapping.loc));
       const locationKey = `${entry.pathMappings.includes(mapping) ? "path" : "body"}:${mapping.sourceName}`;
       if (sourceByLocation.has(locationKey)) diagnostics.push(error(`HTTP 请求字段重复：${mapping.sourceName}`, mapping.loc));
       sourceByLocation.add(locationKey);
@@ -377,17 +402,18 @@ function checkOutputs(fields: readonly OutputField[], environment: Environment, 
   return { kind: "record", name, fields: outputFields };
 }
 
-function checkFields(fields: readonly TypeField[], label: string, objects: ReadonlyMap<string, ObjectType>, diagnostics: Diagnostic[]): void {
+function checkFields(fields: readonly TypeField[], label: string, typeInfo: ProgramTypeInfo, diagnostics: Diagnostic[]): void {
   const names = new Set<string>();
   for (const field of fields) {
     if (names.has(field.name)) diagnostics.push(error(`${label}中字段重复：${field.name}`, field.loc ?? { line: 1, column: 1 }));
     names.add(field.name);
-    resolveType(field.type, objects, diagnostics, field.loc ?? { line: 1, column: 1 });
+    resolveType(field.type, typeInfo.objectTypes, typeInfo.valueTypes, diagnostics, field.loc ?? { line: 1, column: 1 });
   }
 }
 
 export function inferExpressionType(expression: Expression, environment: Environment, diagnostics: Diagnostic[] = []): TypeRef | null {
   if (expression.kind === "integer-literal") return INTEGER;
+  if (expression.kind === "money-literal") return { kind: "money", currency: expression.currency, unit: expression.unit, scale: expression.scale };
   if (expression.kind === "reference") {
     const type = environment.get(expression.name);
     if (!type) diagnostics.push(error(`引用了未定义的名称：${expression.name}`, expression.loc));
@@ -434,6 +460,7 @@ export function areSameType(left: TypeRef, right: TypeRef): boolean {
   if (left.kind === "text" && right.kind === "text") return true;
   if (left.kind === "boolean" && right.kind === "boolean") return true;
   if (left.kind === "money" && right.kind === "money") return left.currency === right.currency && left.unit === right.unit && left.scale === right.scale;
+  if (left.kind === "value" && right.kind === "value") return left.name === right.name;
   if (left.kind === "object" && right.kind === "object") return left.name === right.name;
   if (left.kind === "record" && right.kind === "record") return left.name === right.name;
   return false;
@@ -444,6 +471,8 @@ export function describeType(type: TypeRef): string {
   if (type.kind === "text") return "文本";
   if (type.kind === "boolean") return "布尔";
   if (type.kind === "money") return `${type.currency === "CNY" ? "人民币" : type.currency === "USD" ? "美元" : type.currency}金额（单位为${type.unit}）`;
+  if (type.kind === "value") return `取值 ${type.name}`;
+  if (type.kind === "named") return `未解析类型 ${type.name}`;
   if (type.kind === "object") return `对象 ${type.name}`;
   if (type.kind === "record") return `流程 ${type.name} 的输出`;
   return "未知类型";
@@ -453,16 +482,30 @@ export function flowKey(name: string): string {
   return name;
 }
 
-function resolveType(type: TypeRef, objects: ReadonlyMap<string, ObjectType>, diagnostics: Diagnostic[], loc: { line: number; column: number }): TypeRef {
-  if (type.kind !== "object") return type;
-  const resolved = objects.get(type.name);
-  if (!resolved) diagnostics.push(error(`引用了未声明的对象类型：${type.name}`, loc));
+function resolveType(
+  type: TypeRef,
+  objects: ReadonlyMap<string, ObjectType>,
+  valueTypes: ReadonlyMap<string, ValueType>,
+  diagnostics: Diagnostic[],
+  loc: { line: number; column: number },
+): TypeRef {
+  if (type.kind !== "named") return type;
+  const resolved = objects.get(type.name) ?? valueTypes.get(type.name);
+  if (!resolved) diagnostics.push(error(`引用了未声明的类型：${type.name}`, loc));
   return resolved ?? type;
 }
 
-function resolveTypeWithoutDiagnostics(type: TypeRef, objects: ReadonlyMap<string, ObjectType>): TypeRef {
-  if (type.kind !== "object") return type;
-  return objects.get(type.name) ?? type;
+function resolveTypeWithoutDiagnostics(type: TypeRef, objects: ReadonlyMap<string, ObjectType>, valueTypes: ReadonlyMap<string, ValueType>): TypeRef {
+  if (type.kind !== "named") return type;
+  return objects.get(type.name) ?? valueTypes.get(type.name) ?? type;
+}
+
+function createValueEnvironment(valueTypes: ReadonlyMap<string, ValueType>): Environment {
+  const environment: Environment = new Map();
+  for (const valueType of valueTypes.values()) {
+    for (const value of valueType.values) if (!environment.has(value)) environment.set(value, valueType);
+  }
+  return environment;
 }
 
 function rootExpression(expression: Expression): Expression {

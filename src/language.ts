@@ -62,6 +62,8 @@ function normalizeEnglishLine(text: string): string {
   if (!content || content.startsWith("#")) return text;
 
   const header = translateHeader(content, "application", "应用")
+    ?? translateHeader(content, "values", "取值")
+    ?? translateHeader(content, "value set", "取值")
     ?? translateHeader(content, "object", "对象")
     ?? translateHeader(content, "flow", "流程")
     ?? translateHeader(content, "HTTP entry", "HTTP 入口")
@@ -124,7 +126,10 @@ function translateEnglishType(type: string): string {
 }
 
 function normalizeEnglishExpression(expression: string): string {
-  return expression.replaceAll("'s ", " 的 ");
+  return expression
+    .replace(/(\d+\.\d{2})\s+CNY\b/gu, "$1 元")
+    .replace(/(\d+\.\d{2})\s+USD\b/gu, "$1 美元")
+    .replaceAll("'s ", " 的 ");
 }
 
 function localizeMessage(message: string): string {
@@ -135,6 +140,8 @@ function localizeMessage(message: string): string {
     ["应用名称必须是非空标识符", "Application name must be a non-empty identifier"],
     ["顶层声明必须从第 1 列开始", "Top-level declarations must start in column 1"],
     ["无法识别的顶层声明：", "Unknown top-level declaration: "],
+    ["取值名称必须是标识符", "Value set name must be an identifier"],
+    ["取值成员必须是标识符", "Value member must be an identifier"],
     ["程序必须至少声明一个对象", "The program must declare at least one object"],
     ["程序必须至少声明一个流程", "The program must declare at least one flow"],
     ["对象名称必须是标识符", "Object name must be an identifier"],
