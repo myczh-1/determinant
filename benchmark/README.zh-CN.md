@@ -19,6 +19,34 @@ benchmark/
 
 Contract、Oracle 和 Scorer 一起版本化。每份结果都会记录它们的 SHA-256 摘要。
 
+## 隔离编写工作区
+
+不要把实现工具直接打开在 Determinant 仓库中。应当先在仓库外准备一个独立工作区：
+
+```bash
+npm run benchmark:prepare -- \
+  --mode direct \
+  --tool example-tool \
+  --run 001 \
+  --out /absolute/path/to/example-tool/direct/001
+```
+
+生成的目录是一个独立 Git 仓库，只包含自包含任务、当前模式的说明、冻结 manifest，以及 `aal` 模式需要的 AAL 语言参考。它不包含指向 Scorer、Oracle、示例、参考 submission、历史结果或 Determinant 源码的链接。
+
+实现工具必须直接打开最底层工作区，不能打开它的父目录。每种模式和每次 run 都使用全新会话。仅打开独立目录只能实现上下文隔离；如果需要严格隔离，还必须把工具的文件系统权限限制在这个目录内。
+
+工具完成后，只收集白名单内的实现文件：
+
+```bash
+npm run benchmark:collect -- \
+  --mode direct \
+  --tool example-tool \
+  --run 001 \
+  --from /absolute/path/to/example-tool/direct/001
+```
+
+收集器会验证冻结输入，拒绝符号链接、外部依赖、意外文件、身份变化和已存在的目标目录，然后只把实现复制到 `benchmark/submissions/`。任务文档、manifest 和工作区 Git 数据不会被收集或计入评分。
+
 ## Submission 约定
 
 Direct submission 使用固定结构：

@@ -1,0 +1,323 @@
+{
+  "schemaVersion": 1,
+  "submission": {
+    "mode": "direct",
+    "tool": "codex-5.6luna",
+    "run": "001",
+    "path": "benchmark/submissions/direct/codex-5.6luna/001",
+    "sourceDigest": "sha256:7890f9d9408f8847dd8a4037dead9e5d3857cf430116f181fee7e38677386b84"
+  },
+  "scorer": {
+    "version": 1,
+    "contractName": "determinant-http-crud-v1",
+    "contractDigest": "sha256:5185e5a5ccfe22b42898ce570e55558832405caa0b3e4f03231db7434d9f2a10",
+    "oracleName": "http-crud-black-box-v1",
+    "oracleDigest": "sha256:201c385a2eeb93bcbaff3ccfca73212f370ae204d5bd54f21950f293ffa80ce5",
+    "scorerDigest": "sha256:4bbf0c8a2a84cdd1c820d039f26dfe526d10663f570a2e89d44128156bcf4769"
+  },
+  "build": {
+    "status": "PASS",
+    "stages": [
+      {
+        "name": "prepare",
+        "exitCode": 0
+      },
+      {
+        "name": "build",
+        "exitCode": 0
+      }
+    ]
+  },
+  "service": {
+    "status": "PASS"
+  },
+  "oracle": {
+    "passed": 14,
+    "total": 14,
+    "cases": [
+      {
+        "id": "route-not-found",
+        "status": "PASS",
+        "observed": {
+          "kind": "response",
+          "status": 404,
+          "contentType": "application/json",
+          "body": {
+            "kind": "json",
+            "value": {
+              "error": "Not found"
+            }
+          }
+        }
+      },
+      {
+        "id": "invalid-json",
+        "status": "PASS",
+        "observed": {
+          "kind": "response",
+          "status": 400,
+          "contentType": "application/json",
+          "body": {
+            "kind": "json",
+            "value": {
+              "error": "Invalid JSON"
+            }
+          }
+        }
+      },
+      {
+        "id": "missing-name",
+        "status": "PASS",
+        "observed": {
+          "kind": "response",
+          "status": 400,
+          "contentType": "application/json",
+          "body": {
+            "kind": "json",
+            "value": {
+              "error": "Invalid request input"
+            }
+          }
+        }
+      },
+      {
+        "id": "invalid-id-type",
+        "status": "PASS",
+        "observed": {
+          "kind": "response",
+          "status": 400,
+          "contentType": "application/json",
+          "body": {
+            "kind": "json",
+            "value": {
+              "error": "Invalid request input"
+            }
+          }
+        }
+      },
+      {
+        "id": "create-item",
+        "status": "PASS",
+        "observed": {
+          "kind": "response",
+          "status": 201,
+          "contentType": "application/json",
+          "body": {
+            "kind": "json",
+            "value": {
+              "item": {
+                "id": 101,
+                "name": "Book"
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "duplicate-item",
+        "status": "PASS",
+        "observed": {
+          "kind": "response",
+          "status": 409,
+          "contentType": "application/json",
+          "body": {
+            "kind": "json",
+            "value": {
+              "error": "Item already exists"
+            }
+          }
+        }
+      },
+      {
+        "id": "read-item",
+        "status": "PASS",
+        "observed": {
+          "kind": "response",
+          "status": 200,
+          "contentType": "application/json",
+          "body": {
+            "kind": "json",
+            "value": {
+              "item": {
+                "id": 101,
+                "name": "Book"
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "read-missing-item",
+        "status": "PASS",
+        "observed": {
+          "kind": "response",
+          "status": 404,
+          "contentType": "application/json",
+          "body": {
+            "kind": "json",
+            "value": {
+              "error": "Item not found"
+            }
+          }
+        }
+      },
+      {
+        "id": "update-missing-item",
+        "status": "PASS",
+        "observed": {
+          "kind": "response",
+          "status": 404,
+          "contentType": "application/json",
+          "body": {
+            "kind": "json",
+            "value": {
+              "error": "Item not found"
+            }
+          }
+        }
+      },
+      {
+        "id": "update-item",
+        "status": "PASS",
+        "observed": {
+          "kind": "response",
+          "status": 200,
+          "contentType": "application/json",
+          "body": {
+            "kind": "json",
+            "value": {
+              "item": {
+                "id": 101,
+                "name": "Notebook"
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "read-updated-item",
+        "status": "PASS",
+        "observed": {
+          "kind": "response",
+          "status": 200,
+          "contentType": "application/json",
+          "body": {
+            "kind": "json",
+            "value": {
+              "item": {
+                "id": 101,
+                "name": "Notebook"
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "delete-item",
+        "status": "PASS",
+        "observed": {
+          "kind": "response",
+          "status": 204,
+          "contentType": null,
+          "body": {
+            "kind": "absent"
+          }
+        }
+      },
+      {
+        "id": "read-deleted-item",
+        "status": "PASS",
+        "observed": {
+          "kind": "response",
+          "status": 404,
+          "contentType": "application/json",
+          "body": {
+            "kind": "json",
+            "value": {
+              "error": "Item not found"
+            }
+          }
+        }
+      },
+      {
+        "id": "delete-missing-item",
+        "status": "PASS",
+        "observed": {
+          "kind": "response",
+          "status": 404,
+          "contentType": "application/json",
+          "body": {
+            "kind": "json",
+            "value": {
+              "error": "Item not found"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "behavioralFingerprint": "sha256:45d256cf00bcf74e0cc7a1257374519407f10f820d8c62fe5955ceb8aef63b15",
+  "reviewSurface": {
+    "primary": {
+      "fileCount": 1,
+      "bytes": 3615,
+      "lines": 157,
+      "nonBlankLines": 132,
+      "digest": "sha256:c110915eac55b1272a8be70b6114d5d0d7f2386bdf47758d998ec8126cf614db",
+      "files": [
+        {
+          "path": "src/server.js",
+          "bytes": 3615,
+          "lines": 157,
+          "nonBlankLines": 132,
+          "digest": "sha256:2a8a6bf5f9ce4ff555bc9b5afa29dda3673564f3491d5ffe5832075331e1fa1f"
+        }
+      ]
+    },
+    "binding": {
+      "fileCount": 0,
+      "bytes": 0,
+      "lines": 0,
+      "nonBlankLines": 0,
+      "digest": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "files": []
+    },
+    "operational": {
+      "fileCount": 1,
+      "bytes": 174,
+      "lines": 9,
+      "nonBlankLines": 9,
+      "digest": "sha256:855367ea8a59f6c411bafa2421a715303e762b4d343cab673d10402b37680b0a",
+      "files": [
+        {
+          "path": "package.json",
+          "bytes": 174,
+          "lines": 9,
+          "nonBlankLines": 9,
+          "digest": "sha256:6bd5b80b364f0d332b91f60d45e2503b1299a7d77491d1fc7ba4480f973b062c"
+        }
+      ]
+    },
+    "total": {
+      "fileCount": 1,
+      "bytes": 3615,
+      "lines": 157,
+      "nonBlankLines": 132,
+      "digest": "sha256:c110915eac55b1272a8be70b6114d5d0d7f2386bdf47758d998ec8126cf614db",
+      "files": [
+        {
+          "path": "src/server.js",
+          "bytes": 3615,
+          "lines": 157,
+          "nonBlankLines": 132,
+          "digest": "sha256:2a8a6bf5f9ce4ff555bc9b5afa29dda3673564f3491d5ffe5832075331e1fa1f"
+        }
+      ]
+    }
+  },
+  "submissionIntegrity": {
+    "status": "PASS",
+    "before": "sha256:7890f9d9408f8847dd8a4037dead9e5d3857cf430116f181fee7e38677386b84",
+    "after": "sha256:7890f9d9408f8847dd8a4037dead9e5d3857cf430116f181fee7e38677386b84"
+  }
+}

@@ -102,6 +102,8 @@
 - [x] Canonical behavioral fingerprints and review-surface metrics are reproducible.
 - [x] Submission source trees remain unchanged during scoring.
 - [x] Per-submission results aggregate into JSON and Markdown reports.
+- [x] External tools receive standalone, mode-specific authoring workspaces with no repository links.
+- [x] Frozen input verification and an output allowlist separate task material from collected submissions.
 
 ## P1 features
 

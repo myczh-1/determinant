@@ -1,0 +1,11 @@
+{
+  "name": "http-crud-challenge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "In-memory HTTP CRUD service for Item records",
+  "main": "src/index.js",
+  "scripts": {
+    "build": "node --check src/index.js",
+    "start": "node src/index.js"
+  }
+}

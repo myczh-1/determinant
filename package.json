@@ -18,6 +18,8 @@
     "compile:example:zh": "npm run build && node bin/determinant.mjs examples/order/app.zh-CN.aal --language zh-CN --binding examples/order/binding.zh-CN.json --out generated/order.zh-CN.ts",
     "demo:http": "npm run build && node bin/determinant.mjs run examples/items/app.aal --host 127.0.0.1 --port 3000",
     "demo:http:zh": "npm run build && node bin/determinant.mjs run examples/items/app.zh-CN.aal --language zh-CN --host 127.0.0.1 --port 3000",
+    "benchmark:prepare": "node benchmark/workspace/prepare.mjs",
+    "benchmark:collect": "node benchmark/workspace/collect.mjs",
     "benchmark:score": "npm run build && node benchmark/scorer/score.mjs",
     "benchmark:aggregate": "node benchmark/scorer/aggregate.mjs",
     "benchmark:run": "npm run benchmark:score && npm run benchmark:aggregate"

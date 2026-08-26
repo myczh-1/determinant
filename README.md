@@ -226,7 +226,32 @@ Run the direct-versus-AAL benchmark:
 npm run benchmark:run
 ```
 
-The benchmark builds and runs temporary copies of submissions, records canonical behavioral fingerprints and review-surface metrics, then writes `result.json`, `summary.json`, and `report.md` under `benchmark/results/`.
+External implementation tools should first receive a standalone workspace created with `npm run benchmark:prepare`, then have their allowlisted output imported with `npm run benchmark:collect`. The benchmark builds and runs temporary copies of collected submissions, records canonical behavioral fingerprints and review-surface metrics, then writes `result.json`, `summary.json`, and `report.md` under `benchmark/results/`.
+
+## Early benchmark results
+
+A first frozen CRUD benchmark compared direct AI-generated Node.js implementations with AAL compiled through Determinant to Node.js.
+
+Across seven valid submissions:
+
+- 7/7 built successfully;
+- 7/7 started successfully;
+- all passed the frozen HTTP oracle with 14/14 cases;
+- all produced the same observable behavior fingerprint;
+- every completed Direct/AAL pair preserved the tested behavior while reducing the AAL review surface.
+
+| Tool | Direct | AAL | Direct LOC | AAL LOC | LOC reduction | Byte reduction |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| codex-5.6luna | 14/14 | 14/14 | 132 | 104 | 21.21% | 46.97% |
+| omp-deepseek-v4 | 14/14 | 14/14 | 116 | 104 | 10.34% | 56.03% |
+| opencode-deepseek-v4 | 14/14 | 14/14 | 166 | 104 | 37.35% | 58.19% |
+| opencode-glm5-2 | not completed | 14/14 | — | 104 | — | — |
+
+Across the three completed Direct/AAL pairs in aggregate, the AAL review surface was 24.6% smaller by non-empty lines and 54.2% smaller by bytes. LOC in this table means non-empty lines in the primary review surface; generated code and operational package configuration are not counted.
+
+This first benchmark does **not** show a behavioral reliability advantage: every valid Direct and AAL submission passed the same oracle and produced the same behavior fingerprint. What it does show is that, for this task, the same tested behavior could be reviewed through a substantially smaller AAL artifact.
+
+See the [full benchmark report](benchmark/results/report.md).
 
 English is the default AAL dialect and uses filenames without a language suffix.
 

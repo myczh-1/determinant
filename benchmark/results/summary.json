@@ -6,38 +6,71 @@
     "sha256:4bbf0c8a2a84cdd1c820d039f26dfe526d10663f570a2e89d44128156bcf4769"
   ],
   "totals": {
-    "submissions": 2,
-    "buildPassed": 2,
-    "serviceStarted": 2,
-    "fullyPassed": 2,
-    "oraclePassed": 28,
-    "oracleTotal": 28,
-    "medianReviewNonBlankLinesForPassing": 90.5,
-    "medianReviewBytesForPassing": 2561
+    "submissions": 9,
+    "buildPassed": 9,
+    "serviceStarted": 9,
+    "fullyPassed": 9,
+    "oraclePassed": 126,
+    "oracleTotal": 126,
+    "medianReviewNonBlankLinesForPassing": 104,
+    "medianReviewBytesForPassing": 1925
   },
   "modes": {
     "direct": {
-      "submissions": 1,
-      "buildPassed": 1,
-      "serviceStarted": 1,
-      "fullyPassed": 1,
-      "oraclePassed": 14,
-      "oracleTotal": 14,
-      "medianReviewNonBlankLinesForPassing": 77,
-      "medianReviewBytesForPassing": 3197
+      "submissions": 4,
+      "buildPassed": 4,
+      "serviceStarted": 4,
+      "fullyPassed": 4,
+      "oraclePassed": 56,
+      "oracleTotal": 56,
+      "medianReviewNonBlankLinesForPassing": 124,
+      "medianReviewBytesForPassing": 3987.5
     },
     "aal": {
-      "submissions": 1,
-      "buildPassed": 1,
-      "serviceStarted": 1,
-      "fullyPassed": 1,
-      "oraclePassed": 14,
-      "oracleTotal": 14,
+      "submissions": 5,
+      "buildPassed": 5,
+      "serviceStarted": 5,
+      "fullyPassed": 5,
+      "oraclePassed": 70,
+      "oracleTotal": 70,
       "medianReviewNonBlankLinesForPassing": 104,
-      "medianReviewBytesForPassing": 1925
+      "medianReviewBytesForPassing": 1917
     }
   },
   "pairedComparisons": [
+    {
+      "tool": "codex-5.6luna",
+      "run": "001",
+      "comparable": true,
+      "directNonBlankLines": 132,
+      "aalNonBlankLines": 104,
+      "lineReductionPercent": 21.21,
+      "directBytes": 3615,
+      "aalBytes": 1917,
+      "byteReductionPercent": 46.97
+    },
+    {
+      "tool": "omp-deepseek-v4",
+      "run": "001",
+      "comparable": true,
+      "directNonBlankLines": 116,
+      "aalNonBlankLines": 104,
+      "lineReductionPercent": 10.34,
+      "directBytes": 4360,
+      "aalBytes": 1917,
+      "byteReductionPercent": 56.03
+    },
+    {
+      "tool": "opencode-deepseek-v4",
+      "run": "001",
+      "comparable": true,
+      "directNonBlankLines": 166,
+      "aalNonBlankLines": 104,
+      "lineReductionPercent": 37.35,
+      "directBytes": 4585,
+      "aalBytes": 1917,
+      "byteReductionPercent": 58.19
+    },
     {
       "tool": "reference",
       "run": "001",
@@ -51,6 +84,90 @@
     }
   ],
   "submissions": [
+    {
+      "mode": "aal",
+      "tool": "codex-5.6luna",
+      "run": "001",
+      "resultPath": "benchmark/results/aal/codex-5.6luna/001/result.json",
+      "sourceDigest": "sha256:256d62e2e169a3ea41f91c9a8714d0178e144c6a51a9d4dad62232fab6609413",
+      "buildStatus": "PASS",
+      "serviceStatus": "PASS",
+      "oraclePassed": 14,
+      "oracleTotal": 14,
+      "fullyPassed": true,
+      "behavioralFingerprint": "sha256:45d256cf00bcf74e0cc7a1257374519407f10f820d8c62fe5955ceb8aef63b15",
+      "reviewSurface": {
+        "files": 1,
+        "bytes": 1917,
+        "lines": 158,
+        "nonBlankLines": 104,
+        "digest": "sha256:aa9fc40fc35637422b3f0f2a30271fa00521c5928d126c2b3438649b1af90e42"
+      },
+      "integrityStatus": "PASS"
+    },
+    {
+      "mode": "aal",
+      "tool": "omp-deepseek-v4",
+      "run": "001",
+      "resultPath": "benchmark/results/aal/omp-deepseek-v4/001/result.json",
+      "sourceDigest": "sha256:256d62e2e169a3ea41f91c9a8714d0178e144c6a51a9d4dad62232fab6609413",
+      "buildStatus": "PASS",
+      "serviceStatus": "PASS",
+      "oraclePassed": 14,
+      "oracleTotal": 14,
+      "fullyPassed": true,
+      "behavioralFingerprint": "sha256:45d256cf00bcf74e0cc7a1257374519407f10f820d8c62fe5955ceb8aef63b15",
+      "reviewSurface": {
+        "files": 1,
+        "bytes": 1917,
+        "lines": 158,
+        "nonBlankLines": 104,
+        "digest": "sha256:aa9fc40fc35637422b3f0f2a30271fa00521c5928d126c2b3438649b1af90e42"
+      },
+      "integrityStatus": "PASS"
+    },
+    {
+      "mode": "aal",
+      "tool": "opencode-deepseek-v4",
+      "run": "001",
+      "resultPath": "benchmark/results/aal/opencode-deepseek-v4/001/result.json",
+      "sourceDigest": "sha256:256d62e2e169a3ea41f91c9a8714d0178e144c6a51a9d4dad62232fab6609413",
+      "buildStatus": "PASS",
+      "serviceStatus": "PASS",
+      "oraclePassed": 14,
+      "oracleTotal": 14,
+      "fullyPassed": true,
+      "behavioralFingerprint": "sha256:45d256cf00bcf74e0cc7a1257374519407f10f820d8c62fe5955ceb8aef63b15",
+      "reviewSurface": {
+        "files": 1,
+        "bytes": 1917,
+        "lines": 158,
+        "nonBlankLines": 104,
+        "digest": "sha256:aa9fc40fc35637422b3f0f2a30271fa00521c5928d126c2b3438649b1af90e42"
+      },
+      "integrityStatus": "PASS"
+    },
+    {
+      "mode": "aal",
+      "tool": "opencode-glm5-2",
+      "run": "001",
+      "resultPath": "benchmark/results/aal/opencode-glm5-2/001/result.json",
+      "sourceDigest": "sha256:256d62e2e169a3ea41f91c9a8714d0178e144c6a51a9d4dad62232fab6609413",
+      "buildStatus": "PASS",
+      "serviceStatus": "PASS",
+      "oraclePassed": 14,
+      "oracleTotal": 14,
+      "fullyPassed": true,
+      "behavioralFingerprint": "sha256:45d256cf00bcf74e0cc7a1257374519407f10f820d8c62fe5955ceb8aef63b15",
+      "reviewSurface": {
+        "files": 1,
+        "bytes": 1917,
+        "lines": 158,
+        "nonBlankLines": 104,
+        "digest": "sha256:aa9fc40fc35637422b3f0f2a30271fa00521c5928d126c2b3438649b1af90e42"
+      },
+      "integrityStatus": "PASS"
+    },
     {
       "mode": "aal",
       "tool": "reference",
@@ -69,6 +186,69 @@
         "lines": 166,
         "nonBlankLines": 104,
         "digest": "sha256:9b4658f1732ca34fb74b7141e6f9513b00efbe3fae68965cd551db4c9ca979c6"
+      },
+      "integrityStatus": "PASS"
+    },
+    {
+      "mode": "direct",
+      "tool": "codex-5.6luna",
+      "run": "001",
+      "resultPath": "benchmark/results/direct/codex-5.6luna/001/result.json",
+      "sourceDigest": "sha256:7890f9d9408f8847dd8a4037dead9e5d3857cf430116f181fee7e38677386b84",
+      "buildStatus": "PASS",
+      "serviceStatus": "PASS",
+      "oraclePassed": 14,
+      "oracleTotal": 14,
+      "fullyPassed": true,
+      "behavioralFingerprint": "sha256:45d256cf00bcf74e0cc7a1257374519407f10f820d8c62fe5955ceb8aef63b15",
+      "reviewSurface": {
+        "files": 1,
+        "bytes": 3615,
+        "lines": 157,
+        "nonBlankLines": 132,
+        "digest": "sha256:c110915eac55b1272a8be70b6114d5d0d7f2386bdf47758d998ec8126cf614db"
+      },
+      "integrityStatus": "PASS"
+    },
+    {
+      "mode": "direct",
+      "tool": "omp-deepseek-v4",
+      "run": "001",
+      "resultPath": "benchmark/results/direct/omp-deepseek-v4/001/result.json",
+      "sourceDigest": "sha256:e7d76e9eef8ceb47bcce81e3838565c66b2abd8c62a27d6991b284f9b6f3f2ec",
+      "buildStatus": "PASS",
+      "serviceStatus": "PASS",
+      "oraclePassed": 14,
+      "oracleTotal": 14,
+      "fullyPassed": true,
+      "behavioralFingerprint": "sha256:45d256cf00bcf74e0cc7a1257374519407f10f820d8c62fe5955ceb8aef63b15",
+      "reviewSurface": {
+        "files": 1,
+        "bytes": 4360,
+        "lines": 141,
+        "nonBlankLines": 116,
+        "digest": "sha256:1cfa636cb9591c999bbd8f005f2a8cf752e420d306a9930835577b03ee7812fa"
+      },
+      "integrityStatus": "PASS"
+    },
+    {
+      "mode": "direct",
+      "tool": "opencode-deepseek-v4",
+      "run": "001",
+      "resultPath": "benchmark/results/direct/opencode-deepseek-v4/001/result.json",
+      "sourceDigest": "sha256:1c0e67cbd5424db00af65837c9c242d9722a99f047b9d2bbba38eb2afc77753f",
+      "buildStatus": "PASS",
+      "serviceStatus": "PASS",
+      "oraclePassed": 14,
+      "oracleTotal": 14,
+      "fullyPassed": true,
+      "behavioralFingerprint": "sha256:45d256cf00bcf74e0cc7a1257374519407f10f820d8c62fe5955ceb8aef63b15",
+      "reviewSurface": {
+        "files": 1,
+        "bytes": 4585,
+        "lines": 198,
+        "nonBlankLines": 166,
+        "digest": "sha256:71af2db955d8ef60e34d76f73de2731fbfdf76dbd18effc1c5e97ef41f7eb85c"
       },
       "integrityStatus": "PASS"
     },

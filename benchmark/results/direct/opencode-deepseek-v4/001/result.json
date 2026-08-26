@@ -1,0 +1,323 @@
+{
+  "schemaVersion": 1,
+  "submission": {
+    "mode": "direct",
+    "tool": "opencode-deepseek-v4",
+    "run": "001",
+    "path": "benchmark/submissions/direct/opencode-deepseek-v4/001",
+    "sourceDigest": "sha256:1c0e67cbd5424db00af65837c9c242d9722a99f047b9d2bbba38eb2afc77753f"
+  },
+  "scorer": {
+    "version": 1,
+    "contractName": "determinant-http-crud-v1",
+    "contractDigest": "sha256:5185e5a5ccfe22b42898ce570e55558832405caa0b3e4f03231db7434d9f2a10",
+    "oracleName": "http-crud-black-box-v1",
+    "oracleDigest": "sha256:201c385a2eeb93bcbaff3ccfca73212f370ae204d5bd54f21950f293ffa80ce5",
+    "scorerDigest": "sha256:4bbf0c8a2a84cdd1c820d039f26dfe526d10663f570a2e89d44128156bcf4769"
+  },
+  "build": {
+    "status": "PASS",
+    "stages": [
+      {
+        "name": "prepare",
+        "exitCode": 0
+      },
+      {
+        "name": "build",
+        "exitCode": 0
+      }
+    ]
+  },
+  "service": {
+    "status": "PASS"
+  },
+  "oracle": {
+    "passed": 14,
+    "total": 14,
+    "cases": [
+      {
+        "id": "route-not-found",
+        "status": "PASS",
+        "observed": {
+          "kind": "response",
+          "status": 404,
+          "contentType": "application/json",
+          "body": {
+            "kind": "json",
+            "value": {
+              "error": "Not found"
+            }
+          }
+        }
+      },
+      {
+        "id": "invalid-json",
+        "status": "PASS",
+        "observed": {
+          "kind": "response",
+          "status": 400,
+          "contentType": "application/json",
+          "body": {
+            "kind": "json",
+            "value": {
+              "error": "Invalid JSON"
+            }
+          }
+        }
+      },
+      {
+        "id": "missing-name",
+        "status": "PASS",
+        "observed": {
+          "kind": "response",
+          "status": 400,
+          "contentType": "application/json",
+          "body": {
+            "kind": "json",
+            "value": {
+              "error": "Invalid request input"
+            }
+          }
+        }
+      },
+      {
+        "id": "invalid-id-type",
+        "status": "PASS",
+        "observed": {
+          "kind": "response",
+          "status": 400,
+          "contentType": "application/json",
+          "body": {
+            "kind": "json",
+            "value": {
+              "error": "Invalid request input"
+            }
+          }
+        }
+      },
+      {
+        "id": "create-item",
+        "status": "PASS",
+        "observed": {
+          "kind": "response",
+          "status": 201,
+          "contentType": "application/json",
+          "body": {
+            "kind": "json",
+            "value": {
+              "item": {
+                "id": 101,
+                "name": "Book"
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "duplicate-item",
+        "status": "PASS",
+        "observed": {
+          "kind": "response",
+          "status": 409,
+          "contentType": "application/json",
+          "body": {
+            "kind": "json",
+            "value": {
+              "error": "Item already exists"
+            }
+          }
+        }
+      },
+      {
+        "id": "read-item",
+        "status": "PASS",
+        "observed": {
+          "kind": "response",
+          "status": 200,
+          "contentType": "application/json",
+          "body": {
+            "kind": "json",
+            "value": {
+              "item": {
+                "id": 101,
+                "name": "Book"
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "read-missing-item",
+        "status": "PASS",
+        "observed": {
+          "kind": "response",
+          "status": 404,
+          "contentType": "application/json",
+          "body": {
+            "kind": "json",
+            "value": {
+              "error": "Item not found"
+            }
+          }
+        }
+      },
+      {
+        "id": "update-missing-item",
+        "status": "PASS",
+        "observed": {
+          "kind": "response",
+          "status": 404,
+          "contentType": "application/json",
+          "body": {
+            "kind": "json",
+            "value": {
+              "error": "Item not found"
+            }
+          }
+        }
+      },
+      {
+        "id": "update-item",
+        "status": "PASS",
+        "observed": {
+          "kind": "response",
+          "status": 200,
+          "contentType": "application/json",
+          "body": {
+            "kind": "json",
+            "value": {
+              "item": {
+                "id": 101,
+                "name": "Notebook"
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "read-updated-item",
+        "status": "PASS",
+        "observed": {
+          "kind": "response",
+          "status": 200,
+          "contentType": "application/json",
+          "body": {
+            "kind": "json",
+            "value": {
+              "item": {
+                "id": 101,
+                "name": "Notebook"
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "delete-item",
+        "status": "PASS",
+        "observed": {
+          "kind": "response",
+          "status": 204,
+          "contentType": null,
+          "body": {
+            "kind": "absent"
+          }
+        }
+      },
+      {
+        "id": "read-deleted-item",
+        "status": "PASS",
+        "observed": {
+          "kind": "response",
+          "status": 404,
+          "contentType": "application/json",
+          "body": {
+            "kind": "json",
+            "value": {
+              "error": "Item not found"
+            }
+          }
+        }
+      },
+      {
+        "id": "delete-missing-item",
+        "status": "PASS",
+        "observed": {
+          "kind": "response",
+          "status": 404,
+          "contentType": "application/json",
+          "body": {
+            "kind": "json",
+            "value": {
+              "error": "Item not found"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "behavioralFingerprint": "sha256:45d256cf00bcf74e0cc7a1257374519407f10f820d8c62fe5955ceb8aef63b15",
+  "reviewSurface": {
+    "primary": {
+      "fileCount": 1,
+      "bytes": 4585,
+      "lines": 198,
+      "nonBlankLines": 166,
+      "digest": "sha256:71af2db955d8ef60e34d76f73de2731fbfdf76dbd18effc1c5e97ef41f7eb85c",
+      "files": [
+        {
+          "path": "src/index.js",
+          "bytes": 4585,
+          "lines": 198,
+          "nonBlankLines": 166,
+          "digest": "sha256:cc7f6002d320728793b7d8afb80df3993de174e1eb9cd84bc8de37a5d3ab163e"
+        }
+      ]
+    },
+    "binding": {
+      "fileCount": 0,
+      "bytes": 0,
+      "lines": 0,
+      "nonBlankLines": 0,
+      "digest": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "files": []
+    },
+    "operational": {
+      "fileCount": 1,
+      "bytes": 263,
+      "lines": 11,
+      "nonBlankLines": 11,
+      "digest": "sha256:4f42fe7318b654e4c50659a4bec9af2c7920e0b00c9f1686c79e3e6402b25fe3",
+      "files": [
+        {
+          "path": "package.json",
+          "bytes": 263,
+          "lines": 11,
+          "nonBlankLines": 11,
+          "digest": "sha256:715112db7d0374767b6bde4bcdf924c39946dc2f7a039b410dbcaedc1f3b6252"
+        }
+      ]
+    },
+    "total": {
+      "fileCount": 1,
+      "bytes": 4585,
+      "lines": 198,
+      "nonBlankLines": 166,
+      "digest": "sha256:71af2db955d8ef60e34d76f73de2731fbfdf76dbd18effc1c5e97ef41f7eb85c",
+      "files": [
+        {
+          "path": "src/index.js",
+          "bytes": 4585,
+          "lines": 198,
+          "nonBlankLines": 166,
+          "digest": "sha256:cc7f6002d320728793b7d8afb80df3993de174e1eb9cd84bc8de37a5d3ab163e"
+        }
+      ]
+    }
+  },
+  "submissionIntegrity": {
+    "status": "PASS",
+    "before": "sha256:1c0e67cbd5424db00af65837c9c242d9722a99f047b9d2bbba38eb2afc77753f",
+    "after": "sha256:1c0e67cbd5424db00af65837c9c242d9722a99f047b9d2bbba38eb2afc77753f"
+  }
+}

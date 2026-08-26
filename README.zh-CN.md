@@ -226,7 +226,32 @@ node bin/determinant.mjs run examples/items/app.aal --host 127.0.0.1 --port 3000
 npm run benchmark:run
 ```
 
-Benchmark 只构建和运行 submission 的临时副本，记录规范化行为指纹和审计面积指标，并在 `benchmark/results/` 下生成 `result.json`、`summary.json` 和 `report.md`。
+外部实现工具应先使用 `npm run benchmark:prepare` 获得独立工作区，再通过 `npm run benchmark:collect` 导入白名单内的输出。Benchmark 只构建和运行已收集 submission 的临时副本，记录规范化行为指纹和审计面积指标，并在 `benchmark/results/` 下生成 `result.json`、`summary.json` 和 `report.md`。
+
+## 早期 Benchmark 结果
+
+第一轮冻结 CRUD Benchmark 对比了 AI 直接生成的 Node.js 实现，以及通过 AAL 经 Determinant 编译到 Node.js 的实现。
+
+在七份有效 submission 中：
+
+- 7/7 构建成功；
+- 7/7 服务启动成功；
+- 全部通过冻结 HTTP Oracle 的 14/14 个用例；
+- 全部产生相同的可观察行为指纹；
+- 每组已完成的 Direct/AAL 配对都在保持受测行为的同时缩小了 AAL 审计面积。
+
+| 工具 | Direct | AAL | Direct LOC | AAL LOC | LOC 减少 | 字节减少 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| codex-5.6luna | 14/14 | 14/14 | 132 | 104 | 21.21% | 46.97% |
+| omp-deepseek-v4 | 14/14 | 14/14 | 116 | 104 | 10.34% | 56.03% |
+| opencode-deepseek-v4 | 14/14 | 14/14 | 166 | 104 | 37.35% | 58.19% |
+| opencode-glm5-2 | 未完成 | 14/14 | — | 104 | — | — |
+
+按三组已完成 Direct/AAL 配对的总审计面积计算，AAL 的非空行数减少了 24.6%，字节数减少了 54.2%。表中的 LOC 指主要审计面的非空行数，不包含生成代码和运行用 package 配置。
+
+第一轮 Benchmark **没有显示行为可靠性优势**：所有有效 Direct 和 AAL submission 都通过了相同 Oracle，并产生相同的行为指纹。它目前显示的是：对于这个任务，相同的受测行为可以通过明显更小的 AAL 产物进行审计。
+
+参见[完整 Benchmark 报告](benchmark/results/report.md)。
 
 默认 AAL 方言为英文，无语言后缀的文件使用英文。
 
