@@ -11,6 +11,18 @@ It takes a different approach:
 ```text
 Natural language
 → LLM
+→ Auditable semantic representation
+→ Human review
+════════════════════
+→ Deterministic compilation / execution
+→ Final program
+```
+
+This repository uses **AAL (Auditable Application Language)** as one concrete experiment for that semantic representation:
+
+```text
+Natural language
+→ LLM
 → AAL
 → Human review
 ════════════════════
@@ -18,17 +30,73 @@ Natural language
 → TypeScript / Node.js
 ```
 
-AAL (Auditable Application Language) is a human-readable language for application behavior.
-
 AI may generate and modify AAL.
 
 Once the AAL is confirmed, subsequent program generation no longer depends on an LLM.
 
 > **Before review, AI may be probabilistic. After review, the software should not remain probabilistic.**
 
+## This repository is a reference experiment, not a universal language
+
+The central idea of Determinant is **not the particular AAL syntax implemented in this repository**.
+
+This repository is an experimental reference implementation and testbed for one question:
+
+> Can AI stop at a smaller, auditable semantic layer, while the final implementation is produced by conventional deterministic software?
+
+A real project does not need to use this exact syntax.
+
+Its semantic representation could be another textual DSL, JSON or another structured format, an AST or graph, a visual editor, a flowchart, or another representation designed specifically for that project.
+
+The important boundary is not the notation.
+
+> **Once the intended semantics have been expressed and accepted, implementing them should no longer require another probabilistic generation step.**
+
+For the same reason, Determinant is not intended to become one universal production compiler for every application.
+
+Real applications depend on their own libraries, APIs, databases, infrastructure, frameworks, and domain-specific operations. A generic semantic language cannot encode every third-party capability in advance without eventually becoming another general-purpose implementation language.
+
+A production system following this architecture would therefore likely define its own semantic vocabulary, syntax or visual representation, project-specific operations and types, bindings to external systems, and deterministic compiler or execution backend.
+
+This repository provides one implementation to test the architecture, not a requirement that other projects adopt its exact language design.
+
+## A familiar analogy: UI component libraries
+
+A useful analogy is a UI component library.
+
+Consider a React application using a component such as:
+
+```tsx
+<DataGrid rows={users} columns={userColumns} />
+```
+
+A developer or an AI using `DataGrid` does not regenerate the implementation of a data grid every time it needs one.
+
+The caller only needs to express which component is used and with which inputs. The implementation behind `DataGrid` may be complex, but that complexity belongs to the component library.
+
+When reviewing the application, we normally review whether the correct component is being used with the correct inputs. We do not require every caller to re-audit a newly generated implementation of sorting, rendering, scrolling, selection, and other internal behavior.
+
+If multiple AI models all produce:
+
+```tsx
+<DataGrid rows={users} columns={userColumns} />
+```
+
+they have converged on the same defined component operation. They do not each invent a new implementation of `DataGrid`.
+
+Conceptually:
+
+```text
+Model A ─┐
+Model B ─┼─→ same accepted semantic operation ─→ deterministic implementation
+Model C ─┘
+```
+
+The deterministic backend can still contain bugs, just like a compiler or UI library can contain bugs. But those are ordinary software defects in a reusable implementation: they can be fixed and regression-tested in that implementation instead of asking an LLM to generate a fresh implementation every time the semantic operation is used.
+
 ## AAL
 
-AAL keeps two primary business concepts and one explicit external entry:
+The reference AAL implemented in this repository currently keeps two primary business concepts and one explicit external entry:
 
 ```text
 Object
@@ -82,7 +150,7 @@ The user does not need to review which classes, functions, promises, or other im
 
 ## Deterministic boundary
 
-After AAL is confirmed, the build path is:
+After AAL is confirmed, the current reference build path is:
 
 ```text
 AAL
@@ -102,16 +170,20 @@ Node.js
 
 This path does not call an LLM.
 
-The goal is:
+For a fixed environment, the intended contract is:
 
 ```text
-same AAL
+same accepted AAL
 + same AAL language version and dialect
 + same Binding
 + same compiler version
 + same runtime and dependencies
 = same program semantics
 ```
+
+A compiler can contain a bug. That does not make compilation probabilistic. A compiler bug is an implementation defect that should be fixed and regression-tested.
+
+An LLM generating implementation code is different: even with a strict specification, each generation remains another probabilistic implementation step.
 
 Determinant does not eliminate uncertainty from AI-assisted development.
 
@@ -143,7 +215,11 @@ Use an explicit Binding when names must differ, stable identities must survive s
 
 Binding is not everyday business logic. Business behavior is reviewed primarily in AAL; a Binding is reviewed separately when it is created or changed.
 
-The current P0 Binding controls generated TypeScript names. Third-party API, SDK, and database adaptation is not implemented yet.
+The current P0 Binding controls generated TypeScript names.
+
+Third-party API, SDK, database, and framework adaptation is intentionally not treated as something a universal AAL core can completely define in advance. Those capabilities are expected to belong to project-specific deterministic bindings or backends.
+
+They are not implemented yet in this reference compiler.
 
 ## Current implementation
 
@@ -280,15 +356,20 @@ Chinese uses the `.zh-CN` filename suffix and is selected explicitly with:
 
 Determinant is still an early-stage experiment.
 
-The first stage tests three questions:
+The current repository tests four questions:
 
-1. Can AAL express application behavior with substantially less text than ordinary implementation code?
-2. Can people review AAL as the primary business artifact instead of reviewing AI-generated code line by line?
-3. After AAL is confirmed, can program generation leave the probabilistic LLM path completely?
+1. Can a semantic representation express application behavior with substantially less review surface than ordinary implementation code?
+2. Can people review that semantic representation as the primary business artifact instead of reviewing AI-generated implementation code line by line?
+3. Once the semantic representation is accepted, can final program generation leave the probabilistic LLM path completely?
+4. Can this boundary remain useful when real projects introduce their own libraries, APIs, infrastructure, and domain-specific capabilities?
+
+AAL is the representation used to test those questions in this repository.
+
+The experiment does **not** depend on AAL being the final or universal syntax.
 
 The first stage focuses on Node.js backend applications.
 
-React, Vue, and other UI description are outside the current scope.
+React, Vue, and other UI description are outside the current reference implementation.
 
 ## Documentation
 
@@ -302,7 +383,7 @@ React, Vue, and other UI description are outside the current scope.
 
 Generated TypeScript is a build artifact.
 
-Change AAL to change business behavior.
+Change AAL to change business behavior in the current reference implementation.
 
 Change Binding to change stable identities or program-facing names.
 
