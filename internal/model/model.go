@@ -7,16 +7,25 @@ type Location struct {
 }
 
 type Program struct {
-	Version    int         `json:"version"`
-	Name       string      `json:"name"`
-	Types      []Type      `json:"types,omitempty"`
-	Entities   []Entity    `json:"entities,omitempty"`
-	Relations  []Relation  `json:"relations,omitempty"`
-	Operations []Operation `json:"operations,omitempty"`
-	Flows      []Flow      `json:"flows,omitempty"`
-	Routes     []Route     `json:"routes,omitempty"`
-	Resources  []Resource  `json:"resources,omitempty"`
-	Location   Location    `json:"location,omitempty"`
+	Version     int          `json:"version"`
+	Name        string       `json:"name"`
+	Types       []Type       `json:"types,omitempty"`
+	Constraints []Constraint `json:"constraints,omitempty"`
+	Entities    []Entity     `json:"entities,omitempty"`
+	Relations   []Relation   `json:"relations,omitempty"`
+	Operations  []Operation  `json:"operations,omitempty"`
+	Flows       []Flow       `json:"flows,omitempty"`
+	Routes      []Route      `json:"routes,omitempty"`
+	Resources   []Resource   `json:"resources,omitempty"`
+	Location    Location     `json:"location,omitempty"`
+}
+
+type Constraint struct {
+	Flow       string   `json:"flow"`
+	Kind       string   `json:"kind"`
+	Expression string   `json:"expression,omitempty"`
+	Failure    string   `json:"failure,omitempty"`
+	Location   Location `json:"location,omitempty"`
 }
 
 type Type struct {
