@@ -21,5 +21,6 @@ type Diagnostic struct {
 
 type Result struct {
 	Success     bool         `json:"success"`
+	Status      string       `json:"status"`
 	Diagnostics []Diagnostic `json:"diagnostics"`
 }
