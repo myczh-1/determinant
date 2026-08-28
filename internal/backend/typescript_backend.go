@@ -6,10 +6,11 @@ import (
 	"strings"
 
 	"github.com/myczh-1/determinant/internal/ast"
+	"github.com/myczh-1/determinant/internal/binding"
 	"github.com/myczh-1/determinant/internal/semantic"
 )
 
-type TypeScriptBackend struct{}
+type TypeScriptBackend struct{ Binding *binding.Resolved }
 
 func (TypeScriptBackend) Target() string { return "typescript" }
 
@@ -17,7 +18,7 @@ type tsGenerator struct {
 	base *goGenerator
 }
 
-func (TypeScriptBackend) Generate(program *ast.Program, typeInfo *semantic.TypeInfo) (string, error) {
+func (backend TypeScriptBackend) Generate(program *ast.Program, typeInfo *semantic.TypeInfo) (string, error) {
 	if program == nil || typeInfo == nil {
 		return "", fmt.Errorf("cannot generate TypeScript source without a checked program")
 	}
@@ -32,6 +33,7 @@ func (TypeScriptBackend) Generate(program *ast.Program, typeInfo *semantic.TypeI
 		valueTypes:   map[string]string{},
 		usedNames:    map[string]bool{},
 		flowCounters: map[string]int{},
+		binding:      backend.Binding,
 	}
 	base.prepareNames()
 	g := &tsGenerator{base: base}
@@ -41,6 +43,7 @@ func (TypeScriptBackend) Generate(program *ast.Program, typeInfo *semantic.TypeI
 	g.writeValueTypes(&b)
 	g.writeObjects(&b)
 	g.writeStores(&b)
+	g.writeFixtureLoader(&b)
 	for _, flow := range program.Flows {
 		g.writeFlow(&b, flow)
 	}
@@ -103,6 +106,8 @@ function readInteger(value: unknown): number { if (typeof value === "number" && 
 function readText(value: unknown): string { if (typeof value === "string") return value; throw new Error("invalid text"); }
 function readBoolean(value: unknown): boolean { if (typeof value === "boolean") return value; if (value === "true" || value === "false") return value === "true"; throw new Error("invalid boolean"); }
 function readMoney(value: unknown, currency: string, unit: string, scale: number): Money { if (typeof value !== "string") throw new Error("invalid money"); return money(currency, unit, scale, value); }
+function readFixtureTime(value: unknown): Date { const parsed = new Date(readText(value)); if (!Number.isFinite(parsed.getTime()) || parsed.toISOString() !== value) throw new Error("invalid time"); return parsed; }
+function readFixtureValue(value: unknown, allowed: readonly string[]): string { const text = readText(value); if (!allowed.includes(text)) throw new Error("invalid value"); return text; }
 
 `)
 }
@@ -140,6 +145,65 @@ func (g *tsGenerator) writeStores(b *strings.Builder) {
 	}
 }
 
+func (g *tsGenerator) writeFixtureLoader(b *strings.Builder) {
+	stored := make([]ast.Object, 0)
+	for _, object := range g.base.program.Objects {
+		if len(object.IdentityFields) > 0 {
+			stored = append(stored, object)
+		}
+	}
+	b.WriteString("export function loadFixture(input: unknown): void {\n")
+	b.WriteString("  const root = readBody(input);\n")
+	b.WriteString("  if (Object.keys(root).length !== " + strconv.Itoa(len(stored)) + ") throw new Error(\"invalid fixture: unexpected object set\");\n")
+	for _, object := range stored {
+		name := encodeIdentifier(object.Name)
+		b.WriteString("  if (!(" + strconv.Quote(object.Name) + " in root)) throw new Error(" + strconv.Quote("invalid fixture: missing "+object.Name) + ");\n")
+		b.WriteString("  const rows_" + name + " = root[" + strconv.Quote(object.Name) + "];\n")
+		b.WriteString("  if (!Array.isArray(rows_" + name + ")) throw new Error(" + strconv.Quote("invalid fixture: "+object.Name) + ");\n")
+		b.WriteString("  const fixtureStore_" + name + " = new Map<string, " + g.base.objectNames[object.Name] + ">();\n")
+		b.WriteString("  for (const row of rows_" + name + ") {\n")
+		b.WriteString("    const item = readBody(row);\n")
+		b.WriteString("    if (Object.keys(item).length !== " + strconv.Itoa(len(object.Fields)) + ") throw new Error(" + strconv.Quote("invalid fixture: "+object.Name+" fields") + ");\n")
+		b.WriteString("    const value: " + g.base.objectNames[object.Name] + " = {\n")
+		for _, field := range object.Fields {
+			b.WriteString("      " + g.base.fieldNames[object.Name][field.Name] + ": " + g.fixtureValueExpression(field.Type, "item["+strconv.Quote(field.Name)+"]") + ",\n")
+		}
+		b.WriteString("    };\n")
+		b.WriteString("    const key = " + g.identityExpression("value", object) + ";\n")
+		b.WriteString("    if (fixtureStore_" + name + ".has(key)) throw new Error(" + strconv.Quote("invalid fixture: duplicate "+object.Name+" identity") + ");\n")
+		b.WriteString("    fixtureStore_" + name + ".set(key, value);\n  }\n")
+	}
+	for _, object := range stored {
+		name := encodeIdentifier(object.Name)
+		b.WriteString("  store_" + name + ".clear();\n  for (const [key, value] of fixtureStore_" + name + ") store_" + name + ".set(key, value);\n")
+	}
+	b.WriteString("}\n\n")
+}
+
+func (g *tsGenerator) fixtureValueExpression(typeRef ast.TypeRef, value string) string {
+	resolved := g.base.resolveType(typeRef)
+	switch resolved.Kind {
+	case "integer":
+		return "readInteger(" + value + ")"
+	case "text":
+		return "readText(" + value + ")"
+	case "boolean":
+		return "readBoolean(" + value + ")"
+	case "money":
+		return "readMoney(" + value + ", " + strconv.Quote(resolved.Currency) + ", " + strconv.Quote(resolved.Unit) + ", " + strconv.Itoa(resolved.Scale) + ")"
+	case "time":
+		return "readFixtureTime(" + value + ")"
+	case "value":
+		allowed := make([]string, 0, len(resolved.Values))
+		for _, candidate := range resolved.Values {
+			allowed = append(allowed, strconv.Quote(candidate))
+		}
+		return "readFixtureValue(" + value + ", [" + strings.Join(allowed, ", ") + "]) as " + g.base.valueTypes[resolved.Name]
+	default:
+		return "(() => { throw new Error(\"invalid fixture: unsupported field type\") })() as never"
+	}
+}
+
 func (g *tsGenerator) writeFlow(b *strings.Builder, flow ast.Flow) {
 	signature := g.base.typeInfo.FlowSignatures[flow.Name]
 	outputName := g.base.outputNames[flow.Name]
@@ -149,7 +213,7 @@ func (g *tsGenerator) writeFlow(b *strings.Builder, flow ast.Flow) {
 		if index < len(signature.Output.Fields) {
 			outputType = g.base.resolveType(signature.Output.Fields[index].Type)
 		}
-		b.WriteString("  F_" + encodeIdentifier(output.Name) + ": " + g.tsType(outputType) + ";\n")
+		b.WriteString("  " + g.base.outputFieldName(flow.Name, output.Name) + ": " + g.tsType(outputType) + ";\n")
 	}
 	b.WriteString("};\n\n")
 
@@ -165,7 +229,7 @@ func (g *tsGenerator) writeFlow(b *strings.Builder, flow ast.Flow) {
 	g.emitStatements(b, flow.Statements, state, "  ", nil)
 	b.WriteString("  return { ok: true, value: {\n")
 	for _, output := range flow.Outputs {
-		b.WriteString("    F_" + encodeIdentifier(output.Name) + ": " + g.renderExpression(output.Expression, state) + ",\n")
+		b.WriteString("    " + g.base.outputFieldName(flow.Name, output.Name) + ": " + g.renderExpression(output.Expression, state) + ",\n")
 	}
 	b.WriteString("  } };\n}\n\n")
 }
@@ -326,7 +390,7 @@ func (g *tsGenerator) emitExecute(b *strings.Builder, statement ast.Statement, s
 	for index, output := range statement.Outputs {
 		if index < len(called.Output.Fields) {
 			field := called.Output.Fields[index]
-			state.symbols[output] = result + ".value.F_" + encodeIdentifier(field.Name)
+			state.symbols[output] = result + ".value." + g.base.outputFieldName(statement.FlowName, field.Name)
 			state.environment[output] = g.base.resolveType(field.Type)
 		}
 	}
@@ -340,7 +404,7 @@ func (g *tsGenerator) writeEntry(b *strings.Builder) {
 	signature := g.base.typeInfo.FlowSignatures[entry.Name]
 	b.WriteString("export type Input = {\n")
 	for _, input := range entry.Inputs {
-		b.WriteString("  " + input.Name + ": " + g.tsType(g.base.resolveType(input.Type)) + ";\n")
+		b.WriteString("  " + g.base.inputProgramName(entry.Name, input.Name) + ": " + g.tsType(g.base.resolveType(input.Type)) + ";\n")
 	}
 	b.WriteString("};\nexport type Output = " + g.base.outputNames[entry.Name] + ";\n")
 	b.WriteString("export function run(input: Input): FlowResult<Output> { return " + g.base.flowNames[entry.Name] + "(" + g.entryArguments(entry, signature) + "); }\n\n")
@@ -349,7 +413,7 @@ func (g *tsGenerator) writeEntry(b *strings.Builder) {
 func (g *tsGenerator) entryArguments(flow ast.Flow, signature semantic.FlowSignature) string {
 	args := make([]string, 0, len(signature.Inputs))
 	for _, input := range signature.Inputs {
-		args = append(args, "input["+strconv.Quote(input.Name)+"]")
+		args = append(args, "input["+strconv.Quote(g.base.inputProgramName(flow.Name, input.Name))+"]")
 	}
 	return strings.Join(args, ", ")
 }
@@ -414,7 +478,7 @@ export function handleHttpRequest(request: HttpRequest, context: HttpRuntimeCont
 			b.WriteString("      return { status: " + strconv.Itoa(entry.SuccessStatus) + ", body: {\n")
 			signature := g.base.typeInfo.FlowSignatures[flow.Name]
 			for _, output := range signature.Output.Fields {
-				expression := result + ".value.F_" + encodeIdentifier(output.Name)
+				expression := result + ".value." + g.base.outputFieldName(flow.Name, output.Name)
 				b.WriteString("        " + strconv.Quote(output.Name) + ": " + g.serializeValue(expression, g.base.resolveType(output.Type)) + ",\n")
 			}
 			b.WriteString("      } };\n")

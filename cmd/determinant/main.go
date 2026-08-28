@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/myczh-1/determinant/internal/backend"
+	"github.com/myczh-1/determinant/internal/binding"
 	"github.com/myczh-1/determinant/internal/compiler"
 	"github.com/myczh-1/determinant/internal/diagnostics"
 	"github.com/myczh-1/determinant/internal/language"
@@ -53,6 +54,9 @@ type commandOptions struct {
 	language language.Language
 	target   string
 	out      string
+	binding  string
+	fixture  string
+	clock    string
 	json     bool
 }
 
@@ -88,6 +92,25 @@ func parseCommandArgs(args []string, defaultTarget string) (commandOptions, erro
 			options.out = args[index]
 		case strings.HasPrefix(arg, "--out="):
 			options.out = strings.TrimPrefix(arg, "--out=")
+		case arg == "--binding" || arg == "--fixture" || arg == "--clock":
+			if index+1 >= len(args) {
+				return commandOptions{}, fmt.Errorf("%s requires a value", arg)
+			}
+			index++
+			switch arg {
+			case "--binding":
+				options.binding = args[index]
+			case "--fixture":
+				options.fixture = args[index]
+			case "--clock":
+				options.clock = args[index]
+			}
+		case strings.HasPrefix(arg, "--binding="):
+			options.binding = strings.TrimPrefix(arg, "--binding=")
+		case strings.HasPrefix(arg, "--fixture="):
+			options.fixture = strings.TrimPrefix(arg, "--fixture=")
+		case strings.HasPrefix(arg, "--clock="):
+			options.clock = strings.TrimPrefix(arg, "--clock=")
 		case strings.HasPrefix(arg, "-"):
 			return commandOptions{}, fmt.Errorf("unknown option: %s", arg)
 		case options.source == "":
@@ -135,7 +158,7 @@ func executeBuild(args []string, output, errors io.Writer) int {
 	if !ok {
 		return writeDiagnostics(output, errors, options.json, result.Diagnostics, 1)
 	}
-	selected, err := selectBackend(options.target)
+	selected, err := selectBackend(options.target, result.Binding)
 	if err != nil {
 		return writeFailure(output, errors, args, diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "AAL3001", Message: err.Error()})
 	}
@@ -175,7 +198,7 @@ func executeRun(args []string, output, errors io.Writer) int {
 	if !ok {
 		return writeDiagnostics(output, errors, options.json, result.Diagnostics, 1)
 	}
-	selected, err := selectBackend(options.target)
+	selected, err := selectBackend(options.target, result.Binding)
 	if err != nil {
 		return writeFailure(output, errors, args, diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "AAL3001", Message: err.Error()})
 	}
@@ -195,6 +218,17 @@ func executeRun(args []string, output, errors io.Writer) int {
 	command := exec.Command("go", "run", sourcePath)
 	command.Stdout = output
 	command.Stderr = errors
+	command.Env = os.Environ()
+	if options.fixture != "" {
+		fixturePath, err := filepath.Abs(options.fixture)
+		if err != nil {
+			return writeFailure(output, errors, args, diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "AAL3008", Message: "cannot resolve fixture path: " + err.Error(), File: options.fixture})
+		}
+		command.Env = append(command.Env, "DETERMINANT_FIXTURE="+fixturePath)
+	}
+	if options.clock != "" {
+		command.Env = append(command.Env, "DETERMINANT_CLOCK="+options.clock)
+	}
 	if err := command.Run(); err != nil {
 		if exitError, ok := err.(*exec.ExitError); ok {
 			return exitError.ExitCode()
@@ -211,15 +245,29 @@ func compileFile(options commandOptions) (compiler.Result, bool) {
 		return compiler.Result{Diagnostics: []diagnostics.Diagnostic{{Severity: diagnostics.Error, Code: "AAL0003", Message: "cannot read source file: " + err.Error(), File: options.source}}}, false
 	}
 	result := compiler.Compile(string(source), options.language, options.source)
+	if len(result.Diagnostics) == 0 && options.binding != "" {
+		data, err := os.ReadFile(options.binding)
+		if err != nil {
+			result.Diagnostics = append(result.Diagnostics, diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "AAL2216", Message: "cannot read binding file: " + err.Error(), File: options.binding, Line: 1, Column: 1})
+			return result, false
+		}
+		spec, bindingDiagnostics := binding.Parse(data, options.binding)
+		result.Diagnostics = append(result.Diagnostics, bindingDiagnostics...)
+		if len(result.Diagnostics) == 0 {
+			resolved, resolveDiagnostics := binding.Resolve(result.Program, &spec)
+			result.Binding = resolved
+			result.Diagnostics = append(result.Diagnostics, resolveDiagnostics...)
+		}
+	}
 	return result, len(result.Diagnostics) == 0
 }
 
-func selectBackend(target string) (backend.Backend, error) {
+func selectBackend(target string, resolved *binding.Resolved) (backend.Backend, error) {
 	switch target {
 	case "go":
-		return backend.GoBackend{}, nil
+		return backend.GoBackend{Binding: resolved}, nil
 	case "typescript":
-		return backend.TypeScriptBackend{}, nil
+		return backend.TypeScriptBackend{Binding: resolved}, nil
 	default:
 		return nil, fmt.Errorf("unsupported target: %s", target)
 	}

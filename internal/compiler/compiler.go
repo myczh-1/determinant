@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"github.com/myczh-1/determinant/internal/ast"
+	"github.com/myczh-1/determinant/internal/binding"
 	"github.com/myczh-1/determinant/internal/diagnostics"
 	"github.com/myczh-1/determinant/internal/language"
 	"github.com/myczh-1/determinant/internal/model"
@@ -12,6 +13,7 @@ import (
 type Result struct {
 	Program     *ast.Program
 	TypeInfo    *semantic.TypeInfo
+	Binding     *binding.Resolved
 	Model       model.Program
 	Diagnostics []diagnostics.Diagnostic
 }

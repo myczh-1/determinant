@@ -7,10 +7,11 @@ import (
 	"strings"
 
 	"github.com/myczh-1/determinant/internal/ast"
+	"github.com/myczh-1/determinant/internal/binding"
 	"github.com/myczh-1/determinant/internal/semantic"
 )
 
-type GoBackend struct{}
+type GoBackend struct{ Binding *binding.Resolved }
 
 func (GoBackend) Target() string { return "go" }
 
@@ -25,9 +26,10 @@ type goGenerator struct {
 	valueTypes   map[string]string
 	usedNames    map[string]bool
 	flowCounters map[string]int
+	binding      *binding.Resolved
 }
 
-func (GoBackend) Generate(program *ast.Program, typeInfo *semantic.TypeInfo) (string, error) {
+func (backend GoBackend) Generate(program *ast.Program, typeInfo *semantic.TypeInfo) (string, error) {
 	if program == nil || typeInfo == nil {
 		return "", fmt.Errorf("cannot generate Go source without a checked program")
 	}
@@ -42,6 +44,7 @@ func (GoBackend) Generate(program *ast.Program, typeInfo *semantic.TypeInfo) (st
 		valueTypes:   map[string]string{},
 		usedNames:    map[string]bool{},
 		flowCounters: map[string]int{},
+		binding:      backend.Binding,
 	}
 	g.prepareNames()
 	var b strings.Builder
@@ -50,6 +53,7 @@ func (GoBackend) Generate(program *ast.Program, typeInfo *semantic.TypeInfo) (st
 	g.writeValueTypes(&b)
 	g.writeObjects(&b)
 	g.writeStores(&b)
+	g.writeFixtureLoader(&b)
 	for _, flow := range program.Flows {
 		g.writeFlow(&b, flow)
 	}
@@ -66,17 +70,72 @@ func (g *goGenerator) prepareNames() {
 		}
 	}
 	for _, object := range g.program.Objects {
-		g.objectNames[object.Name] = "Object_" + encodeIdentifier(object.Name)
+		g.objectNames[object.Name] = "Object_" + encodeIdentifier(g.objectProgramName(object.Name))
 		fields := map[string]string{}
 		for _, field := range object.Fields {
-			fields[field.Name] = "F_" + encodeIdentifier(field.Name)
+			fields[field.Name] = "F_" + encodeIdentifier(g.fieldProgramName(object.Name, field.Name))
 		}
 		g.fieldNames[object.Name] = fields
 	}
 	for _, flow := range g.program.Flows {
-		g.flowNames[flow.Name] = "flow_" + encodeIdentifier(flow.Name)
+		g.flowNames[flow.Name] = "flow_" + encodeIdentifier(g.flowProgramName(flow.Name))
 		g.outputNames[flow.Name] = "Output_" + encodeIdentifier(flow.Name)
 	}
+}
+
+func (g *goGenerator) objectProgramName(name string) string {
+	if g.binding != nil {
+		if entry, ok := g.binding.Objects[name]; ok && entry.ProgramName != "" {
+			return entry.ProgramName
+		}
+	}
+	return name
+}
+
+func (g *goGenerator) fieldProgramName(object, field string) string {
+	if g.binding != nil {
+		if entry, ok := g.binding.Objects[object]; ok {
+			if mapped, exists := entry.Fields[field]; exists && mapped.ProgramName != "" {
+				return mapped.ProgramName
+			}
+		}
+	}
+	return field
+}
+
+func (g *goGenerator) flowProgramName(name string) string {
+	if g.binding != nil {
+		if entry, ok := g.binding.Flows[name]; ok && entry.ProgramName != "" {
+			return entry.ProgramName
+		}
+	}
+	return name
+}
+
+func (g *goGenerator) inputProgramName(flow, input string) string {
+	if g.binding != nil {
+		if entry, ok := g.binding.Flows[flow]; ok {
+			if mapped, exists := entry.Inputs[input]; exists && mapped.ProgramName != "" {
+				return mapped.ProgramName
+			}
+		}
+	}
+	return input
+}
+
+func (g *goGenerator) outputProgramName(flow, output string) string {
+	if g.binding != nil {
+		if entry, ok := g.binding.Flows[flow]; ok {
+			if mapped, exists := entry.Outputs[output]; exists && mapped.ProgramName != "" {
+				return mapped.ProgramName
+			}
+		}
+	}
+	return output
+}
+
+func (g *goGenerator) outputFieldName(flow, output string) string {
+	return "F_" + encodeIdentifier(g.outputProgramName(flow, output))
 }
 
 func (g *goGenerator) writeHeader(b *strings.Builder) {
@@ -190,6 +249,42 @@ func readTextJSON(raw json.RawMessage) (string, error) { var value string; if le
 func readIntegerJSON(raw json.RawMessage) (int64, error) { value, err := readRaw(raw); if err != nil { return 0, err }; number, ok := value.(json.Number); if !ok { return 0, fmt.Errorf("invalid integer") }; parsed, err := strconv.ParseInt(string(number), 10, 64); if err != nil { return 0, fmt.Errorf("invalid integer") }; return parsed, nil }
 func readBooleanJSON(raw json.RawMessage) (bool, error) { var value bool; if len(raw) == 0 { return false, fmt.Errorf("missing required field") }; if err := json.Unmarshal(raw, &value); err != nil { return false, fmt.Errorf("invalid boolean") }; return value, nil }
 func readMoneyJSON(raw json.RawMessage, currency, unit string, scale int) (Money, error) { value, err := readTextJSON(raw); if err != nil { return Money{}, err }; return moneyFromText(currency, unit, scale, value) }
+func readFixtureText(raw json.RawMessage) (string, error) { return readTextJSON(raw) }
+func readFixtureInteger(raw json.RawMessage) (int64, error) { return readIntegerJSON(raw) }
+func readFixtureBoolean(raw json.RawMessage) (bool, error) { return readBooleanJSON(raw) }
+func readFixtureMoney(raw json.RawMessage, currency, unit string, scale int) (Money, error) { return readMoneyJSON(raw, currency, unit, scale) }
+func readFixtureTime(raw json.RawMessage) (time.Time, error) {
+	value, err := readTextJSON(raw)
+	if err != nil { return time.Time{}, err }
+	parsed, err := time.Parse(time.RFC3339Nano, value)
+	if err != nil || parsed.UTC().Format("2006-01-02T15:04:05.000Z") != value { return time.Time{}, fmt.Errorf("invalid time") }
+	return parsed.UTC(), nil
+}
+func readFixtureValue(raw json.RawMessage, allowed ...string) (string, error) {
+	value, err := readTextJSON(raw)
+	if err != nil { return "", err }
+	for _, candidate := range allowed { if candidate == value { return value, nil } }
+	return "", fmt.Errorf("invalid value")
+}
+func mustFixtureText(raw json.RawMessage) string { value, err := readFixtureText(raw); if err != nil { panic(err) }; return value }
+func mustFixtureInteger(raw json.RawMessage) int64 { value, err := readFixtureInteger(raw); if err != nil { panic(err) }; return value }
+func mustFixtureBoolean(raw json.RawMessage) bool { value, err := readFixtureBoolean(raw); if err != nil { panic(err) }; return value }
+func mustFixtureMoney(raw json.RawMessage, currency, unit string, scale int) Money { value, err := readFixtureMoney(raw, currency, unit, scale); if err != nil { panic(err) }; return value }
+func mustFixtureTime(raw json.RawMessage) time.Time { value, err := readFixtureTime(raw); if err != nil { panic(err) }; return value }
+func mustFixtureValue(raw json.RawMessage, allowed ...string) string { value, err := readFixtureValue(raw, allowed...); if err != nil { panic(err) }; return value }
+func mustFixtureUnsupported() any { panic("invalid fixture: unsupported field type") }
+func configuredNow() time.Time {
+	value := os.Getenv("DETERMINANT_CLOCK")
+	if value == "" { return time.Now().UTC() }
+	parsed, _ := time.Parse(time.RFC3339Nano, value)
+	return parsed.UTC()
+}
+func validateRuntimeConfig() error {
+	value := os.Getenv("DETERMINANT_CLOCK")
+	if value == "" { return nil }
+	if _, err := time.Parse(time.RFC3339Nano, value); err != nil { return fmt.Errorf("invalid clock: %s", value) }
+	return nil
+}
 
 `)
 }
@@ -227,6 +322,68 @@ func (g *goGenerator) writeStores(b *strings.Builder) {
 	}
 }
 
+func (g *goGenerator) writeFixtureLoader(b *strings.Builder) {
+	stored := make([]ast.Object, 0)
+	for _, object := range g.program.Objects {
+		if len(object.IdentityFields) > 0 {
+			stored = append(stored, object)
+		}
+	}
+	b.WriteString("func loadFixtureFromEnv() (err error) {\n")
+	b.WriteString("\tdefer func() { if recovered := recover(); recovered != nil { err = fmt.Errorf(\"invalid fixture: %v\", recovered) } }()\n")
+	b.WriteString("\tpath := os.Getenv(\"DETERMINANT_FIXTURE\")\n\tif path == \"\" { return nil }\n")
+	b.WriteString("\tdata, err := os.ReadFile(path)\n\tif err != nil { return fmt.Errorf(\"read fixture: %w\", err) }\n")
+	b.WriteString("\tvar root map[string]json.RawMessage\n\tif err := json.Unmarshal(data, &root); err != nil { return fmt.Errorf(\"invalid fixture JSON: %w\", err) }\n")
+	b.WriteString("\tif len(root) != " + strconv.Itoa(len(stored)) + " { return fmt.Errorf(\"invalid fixture: unexpected object set\") }\n")
+	for _, object := range stored {
+		b.WriteString("\tif _, ok := root[" + strconv.Quote(object.Name) + "]; !ok { return fmt.Errorf(\"invalid fixture: missing " + object.Name + "\") }\n")
+		b.WriteString("\tvar rows_" + encodeIdentifier(object.Name) + " []map[string]json.RawMessage\n")
+		b.WriteString("\tif err := json.Unmarshal(root[" + strconv.Quote(object.Name) + "], &rows_" + encodeIdentifier(object.Name) + "); err != nil { return fmt.Errorf(\"invalid fixture: " + object.Name + "\") }\n")
+		b.WriteString("\tfixtureStore_" + encodeIdentifier(object.Name) + " := map[string]*" + g.objectNames[object.Name] + "{}\n")
+		b.WriteString("\tfor _, row := range rows_" + encodeIdentifier(object.Name) + " {\n")
+		b.WriteString("\t\tif len(row) != " + strconv.Itoa(len(object.Fields)) + " { return fmt.Errorf(\"invalid fixture: " + object.Name + " fields\") }\n")
+		b.WriteString("\t\titem := &" + g.objectNames[object.Name] + "{\n")
+		for _, field := range object.Fields {
+			b.WriteString("\t\t\t" + g.fieldNames[object.Name][field.Name] + ": ")
+			b.WriteString(g.fixtureValueExpression(field.Type, "row["+strconv.Quote(field.Name)+"]"))
+			b.WriteString(",\n")
+		}
+		b.WriteString("\t\t}\n")
+		b.WriteString("\t\tkey := " + g.identityExpression("item", object) + "\n")
+		b.WriteString("\t\tif _, exists := fixtureStore_" + encodeIdentifier(object.Name) + "[key]; exists { return fmt.Errorf(\"invalid fixture: duplicate " + object.Name + " identity\") }\n")
+		b.WriteString("\t\tfixtureStore_" + encodeIdentifier(object.Name) + "[key] = item\n")
+		b.WriteString("\t}\n")
+	}
+	for _, object := range stored {
+		b.WriteString("\tstore_" + encodeIdentifier(object.Name) + " = fixtureStore_" + encodeIdentifier(object.Name) + "\n")
+	}
+	b.WriteString("\treturn nil\n}\n\n")
+}
+
+func (g *goGenerator) fixtureValueExpression(typeRef ast.TypeRef, raw string) string {
+	resolved := g.resolveType(typeRef)
+	switch resolved.Kind {
+	case "integer":
+		return "mustFixtureInteger(" + raw + ")"
+	case "text":
+		return "mustFixtureText(" + raw + ")"
+	case "boolean":
+		return "mustFixtureBoolean(" + raw + ")"
+	case "money":
+		return "mustFixtureMoney(" + raw + ", " + strconv.Quote(resolved.Currency) + ", " + strconv.Quote(resolved.Unit) + ", " + strconv.Itoa(resolved.Scale) + ")"
+	case "time":
+		return "mustFixtureTime(" + raw + ")"
+	case "value":
+		values := make([]string, 0, len(resolved.Values))
+		for _, value := range resolved.Values {
+			values = append(values, strconv.Quote(value))
+		}
+		return g.valueTypes[resolved.Name] + "(mustFixtureValue(" + raw + ", " + strings.Join(values, ", ") + "))"
+	default:
+		return "mustFixtureUnsupported()"
+	}
+}
+
 func (g *goGenerator) writeFlow(b *strings.Builder, flow ast.Flow) {
 	outputName := g.outputNames[flow.Name]
 	b.WriteString("type " + outputName + " struct {\n")
@@ -236,7 +393,7 @@ func (g *goGenerator) writeFlow(b *strings.Builder, flow ast.Flow) {
 		if index < len(signature.Output.Fields) {
 			outputType = g.resolveType(signature.Output.Fields[index].Type)
 		}
-		b.WriteString("\t" + "F_" + encodeIdentifier(output.Name) + " " + g.goSemanticType(outputType) + " `json:\"" + output.Name + "\"`\n")
+		b.WriteString("\t" + g.outputFieldName(flow.Name, output.Name) + " " + g.goSemanticType(outputType) + " `json:\"" + output.Name + "\"`\n")
 	}
 	b.WriteString("}\n\n")
 
@@ -256,7 +413,7 @@ func (g *goGenerator) writeFlow(b *strings.Builder, flow ast.Flow) {
 	b.WriteString("\treturn FlowResult[" + outputName + "]{OK: true, Value: " + outputName + "{\n")
 	for _, output := range flow.Outputs {
 		outputType := g.expressionType(output.Expression, state.environment)
-		b.WriteString("\t\tF_" + encodeIdentifier(output.Name) + ": " + g.renderExpression(output.Expression, state) + ",\n")
+		b.WriteString("\t\t" + g.outputFieldName(flow.Name, output.Name) + ": " + g.renderExpression(output.Expression, state) + ",\n")
 		_ = outputType
 	}
 	b.WriteString("\t}}\n}\n\n")
@@ -439,7 +596,7 @@ func (g *goGenerator) emitExecute(b *strings.Builder, statement ast.Statement, s
 			break
 		}
 		field := called.Output.Fields[index]
-		name := "F_" + encodeIdentifier(field.Name)
+		name := g.outputFieldName(statement.FlowName, field.Name)
 		state.symbols[output] = result + ".Value." + name
 		state.environment[output] = g.resolveType(field.Type)
 	}
@@ -447,6 +604,8 @@ func (g *goGenerator) emitExecute(b *strings.Builder, statement ast.Statement, s
 
 func (g *goGenerator) writeHTTP(b *strings.Builder) {
 	b.WriteString("func main() {\n")
+	b.WriteString("\tif err := validateRuntimeConfig(); err != nil { log.Fatal(err) }\n")
+	b.WriteString("\tif err := loadFixtureFromEnv(); err != nil { log.Fatal(err) }\n")
 	if len(g.program.HTTPEntries) == 0 {
 		b.WriteString("\tfmt.Println(applicationName + \" has no HTTP routes\")\n")
 		b.WriteString("}\n")
@@ -477,7 +636,7 @@ func (g *goGenerator) writeHTTP(b *strings.Builder) {
 			mapping, source, fromPath := g.httpMapping(entry, input.Name)
 			variable := fmt.Sprintf("input_%d", index)
 			if source == "system" {
-				b.WriteString("\t\t\t" + variable + " := time.Now()\n")
+				b.WriteString("\t\t\t" + variable + " := configuredNow()\n")
 				continue
 			}
 			read := g.httpReader(input.Type, mapping.SourceName, fromPath)
@@ -501,7 +660,7 @@ func (g *goGenerator) writeHTTP(b *strings.Builder) {
 			b.WriteString("\t\t\twriteJSON(response, " + strconv.Itoa(entry.SuccessStatus) + ", map[string]any{\n")
 			signature := g.typeInfo.FlowSignatures[flow.Name]
 			for _, output := range signature.Output.Fields {
-				expression := result + ".Value.F_" + encodeIdentifier(output.Name)
+				expression := result + ".Value." + g.outputFieldName(flow.Name, output.Name)
 				b.WriteString("\t\t\t\t" + strconv.Quote(output.Name) + ": " + g.serializeValue(expression, g.resolveType(output.Type)) + ",\n")
 			}
 			b.WriteString("\t\t\t}); return\n")

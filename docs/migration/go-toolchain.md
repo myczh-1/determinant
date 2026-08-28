@@ -19,15 +19,16 @@ The existing TypeScript/Node implementation remains available as the behavioral 
 - Go lexer, parser, semantic checker, and compiler pipeline;
 - deterministic ProgramModel JSON serialization;
 - `determinant check` and `check --json`;
-- Go Backend generating a compilable standalone Go program and serving the HTTP Todo example through the system Go toolchain;
+- Go Backend generating a compilable standalone Go program and serving the HTTP Todo/Fixture examples through the system Go toolchain;
 - TypeScript Backend generating TypeScript directly from the Go Core, with the migration examples compiling and HTTP CRUD calls covered;
+- Binding and Fixture support for the current examples, including explicit program-name mappings, full fixture validation, and atomic store replacement;
 - an out-of-process Observer Plugin Protocol over stdin/stdout JSON Lines;
 - Semantic Plugin parameter placeholder and Backend interface boundary;
 - macOS, Linux, and Windows cross-build verification for the Go CLI.
 
 ## Current boundary
 
-Complete Binding/Fixture compatibility, TypeScript target runner management, `dev/watch`, Mermaid/ER/flow product UX, a VS Code extension, and full third-party semantic plugins are not part of the completed slice yet. The old Node implementation must remain until the corresponding migration gates are completed or those items are explicitly moved to follow-up branches.
+Exact legacy Binding diagnostic compatibility, TypeScript target runner management, `dev/watch`, Mermaid/ER/flow product UX, a VS Code extension, and full third-party semantic plugins are not part of the completed slice yet. The old Node implementation must remain until the corresponding migration gates are completed or those items are explicitly moved to follow-up branches.
 
 Target runtimes are user-provided. Determinant generates target source; `run --target go` invokes the system Go toolchain and does not bundle Go, Node, or Bun.
 

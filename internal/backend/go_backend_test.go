@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/myczh-1/determinant/internal/binding"
 	"github.com/myczh-1/determinant/internal/language"
 	"github.com/myczh-1/determinant/internal/parser"
 	"github.com/myczh-1/determinant/internal/semantic"
@@ -100,6 +101,48 @@ func TestGoBackendGeneratesAllMigrationExamples(t *testing.T) {
 				t.Fatalf("generated Go did not compile: %v\n%s", err, output)
 			}
 		})
+	}
+}
+
+func TestBackendsHonorExplicitBindingNames(t *testing.T) {
+	root := filepath.Join("..", "..")
+	source, err := os.ReadFile(filepath.Join(root, "examples", "order", "app.aal"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bindingData, err := os.ReadFile(filepath.Join(root, "examples", "order", "binding.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed := parser.Parse(string(source), language.English, "examples/order/app.aal")
+	if len(parsed.Diagnostics) != 0 {
+		t.Fatalf("parse diagnostics: %#v", parsed.Diagnostics)
+	}
+	typeInfo, diagnostics := semantic.Check(parsed.Program)
+	if len(diagnostics) != 0 {
+		t.Fatalf("semantic diagnostics: %#v", diagnostics)
+	}
+	spec, diagnostics := binding.Parse(bindingData, "examples/order/binding.json")
+	if len(diagnostics) != 0 {
+		t.Fatalf("binding diagnostics: %#v", diagnostics)
+	}
+	resolved, diagnostics := binding.Resolve(parsed.Program, &spec)
+	if len(diagnostics) != 0 {
+		t.Fatalf("binding resolve diagnostics: %#v", diagnostics)
+	}
+	goSource, err := (GoBackend{Binding: resolved}).Generate(parsed.Program, typeInfo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(goSource, "flow_createOrder") || !strings.Contains(goSource, "F_id") {
+		t.Fatal("Go backend did not use explicit binding names")
+	}
+	tsSource, err := (TypeScriptBackend{Binding: resolved}).Generate(parsed.Program, typeInfo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(tsSource, "flow_createOrder") || !strings.Contains(tsSource, "F_id") {
+		t.Fatal("TypeScript backend did not use explicit binding names")
 	}
 }
 
@@ -194,6 +237,79 @@ func TestGeneratedGoProgramServesItemsHTTP(t *testing.T) {
 	_ = response.Body.Close()
 }
 
+func TestGeneratedGoProgramLoadsFixtureAndClock(t *testing.T) {
+	root := filepath.Join("..", "..")
+	source, err := os.ReadFile(filepath.Join(root, "examples", "order-refund", "app.zh-CN.aal"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture, err := filepath.Abs(filepath.Join(root, "examples", "order-refund", "fixture.v1.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed := parser.Parse(string(source), language.Chinese, "examples/order-refund/app.zh-CN.aal")
+	if len(parsed.Diagnostics) != 0 {
+		t.Fatalf("parse diagnostics: %#v", parsed.Diagnostics)
+	}
+	typeInfo, diagnostics := semantic.Check(parsed.Program)
+	if len(diagnostics) != 0 {
+		t.Fatalf("semantic diagnostics: %#v", diagnostics)
+	}
+	generated, err := (GoBackend{}).Generate(parsed.Program, typeInfo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory := t.TempDir()
+	sourcePath := filepath.Join(directory, "main.go")
+	binary := filepath.Join(directory, "refund-server")
+	if err := os.WriteFile(sourcePath, []byte(generated), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	build := exec.Command("go", "build", "-o", binary, sourcePath)
+	build.Dir = directory
+	build.Env = append(os.Environ(), "GO111MODULE=off")
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("generated Go did not build: %v\n%s", err, output)
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	_ = listener.Close()
+	command := exec.Command(binary)
+	command.Dir = directory
+	command.Env = append(os.Environ(), "GO111MODULE=off", fmt.Sprintf("PORT=%d", port), "DETERMINANT_FIXTURE="+fixture, "DETERMINANT_CLOCK=2026-01-08T00:00:00.000Z")
+	command.Stdout = io.Discard
+	command.Stderr = io.Discard
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_ = command.Wait()
+	}()
+	client := &http.Client{}
+	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+	var response *http.Response
+	for attempt := 0; attempt < 200; attempt++ {
+		response, err = client.Get(baseURL + "/orders/102/refundable")
+		if err == nil {
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	if err != nil {
+		t.Fatalf("generated refund server did not start: %v", err)
+	}
+	assertStatus(t, response, http.StatusOK)
+	var payload map[string]any
+	decodeJSON(t, response, &payload)
+	if payload["可退款金额"] != "200.00" || payload["可退款数量"] != float64(2) {
+		t.Fatalf("unexpected fixture response: %#v", payload)
+	}
+}
+
 func TestTypeScriptBackendGeneratesAllMigrationExamples(t *testing.T) {
 	root := filepath.Join("..", "..")
 	cases := []struct {
@@ -286,6 +402,56 @@ if (missing.status !== 404) process.exit(4);
 	run.Dir = directory
 	if output, err := run.CombinedOutput(); err != nil {
 		t.Fatalf("generated TypeScript HTTP behavior failed: %v\n%s", err, output)
+	}
+}
+
+func TestGeneratedTypeScriptLoadsFixture(t *testing.T) {
+	root := filepath.Join("..", "..")
+	source, err := os.ReadFile(filepath.Join(root, "examples", "order-refund", "app.zh-CN.aal"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed := parser.Parse(string(source), language.Chinese, "examples/order-refund/app.zh-CN.aal")
+	if len(parsed.Diagnostics) != 0 {
+		t.Fatalf("parse diagnostics: %#v", parsed.Diagnostics)
+	}
+	typeInfo, diagnostics := semantic.Check(parsed.Program)
+	if len(diagnostics) != 0 {
+		t.Fatalf("semantic diagnostics: %#v", diagnostics)
+	}
+	generated, err := (TypeScriptBackend{}).Generate(parsed.Program, typeInfo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory := t.TempDir()
+	if err := os.WriteFile(filepath.Join(directory, "generated.ts"), []byte(generated), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(directory, "package.json"), []byte(`{"type":"module"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	compile := exec.Command("npx", "tsc", "--target", "ES2022", "--module", "NodeNext", "--moduleResolution", "NodeNext", "--skipLibCheck", "--outDir", directory, filepath.Join(directory, "generated.ts"))
+	compile.Dir = root
+	if output, err := compile.CombinedOutput(); err != nil {
+		t.Fatalf("generated TypeScript did not compile: %v\n%s", err, output)
+	}
+	script := `import { handleHttpRequest, loadFixture } from "./generated.js";
+loadFixture({
+  "订单": [{"编号": 102, "状态": "已支付", "商品编号": 1002, "商品单价": "100.00", "购买数量": 2, "已退款数量": 0, "已退款金额": "0.00"}],
+  "支付记录": [{"订单编号": 102, "支付金额": "200.00", "支付时间": "2026-01-01T00:00:00.000Z"}],
+  "商品库存": [{"商品编号": 1002, "库存数量": 10}],
+  "用户": [{"编号": 1, "角色": "普通用户"}]
+});
+const response = handleHttpRequest({ method: "GET", path: "/orders/102/refundable" });
+if (response.status !== 200 || response.body["可退款金额"] !== "200.00" || response.body["可退款数量"] !== 2) process.exit(1);
+`
+	if err := os.WriteFile(filepath.Join(directory, "test.mjs"), []byte(script), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	run := exec.Command("node", filepath.Join(directory, "test.mjs"))
+	run.Dir = directory
+	if output, err := run.CombinedOutput(); err != nil {
+		t.Fatalf("generated TypeScript fixture behavior failed: %v\n%s", err, output)
 	}
 }
 
