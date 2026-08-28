@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -32,5 +34,25 @@ func TestCheckCommandReportsErrors(t *testing.T) {
 	}
 	if !bytes.Contains(output.Bytes(), []byte(`"status":"error"`)) {
 		t.Fatalf("missing machine-readable error: %s", output.String())
+	}
+}
+
+func TestBuildCommandWritesGoAndTypeScriptTargets(t *testing.T) {
+	for _, target := range []string{"go", "typescript"} {
+		t.Run(target, func(t *testing.T) {
+			outputPath := filepath.Join(t.TempDir(), "generated."+target)
+			var output, errors bytes.Buffer
+			code := execute([]string{"build", "../../examples/items/app.aal", "--target", target, "--out", outputPath}, &output, &errors)
+			if code != 0 || errors.Len() != 0 {
+				t.Fatalf("unexpected command result: code=%d output=%q errors=%q", code, output.String(), errors.String())
+			}
+			generated, err := os.ReadFile(outputPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(generated) == 0 {
+				t.Fatal("generated target is empty")
+			}
+		})
 	}
 }

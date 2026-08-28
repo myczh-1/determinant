@@ -219,7 +219,7 @@ func selectBackend(target string) (backend.Backend, error) {
 	case "go":
 		return backend.GoBackend{}, nil
 	case "typescript":
-		return nil, fmt.Errorf("typescript backend migration is not wired yet")
+		return backend.TypeScriptBackend{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported target: %s", target)
 	}
