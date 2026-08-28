@@ -22,6 +22,7 @@
     "test:order-refund": "npm run build && node --test test/order-refund.oracle.test.mjs",
     "test:order-refund:composed-flow": "npm run build && DETERMINANT_ORDER_REFUND_AAL=examples/order-refund/app.composed-flow.zh-CN.aal node --test test/order-refund.oracle.test.mjs",
     "verify:baseline": "node scripts/verify-migration-baseline.mjs",
+    "test:acceptance": "node scripts/verify-toolchain-acceptance.mjs",
     "test:migration": "node scripts/verify-go-migration.mjs",
     "benchmark:prepare": "node benchmark/workspace/prepare.mjs",
     "benchmark:collect": "node benchmark/workspace/collect.mjs",

@@ -21,13 +21,16 @@ function run(name, command, args, environment = process.env) {
 run("frozen reference baseline", npm, ["run", "verify:baseline"]);
 run("legacy Node/TypeScript suite", npm, ["test"]);
 run("composed-flow reference oracle", npm, ["run", "test:order-refund:composed-flow"]);
+run("toolchain acceptance gates", process.execPath, ["scripts/verify-toolchain-acceptance.mjs"]);
 run("Go Core generated TypeScript differential oracle", process.execPath, ["scripts/verify-typescript-backend.mjs"]);
 run("Go compiler and backend tests", "go", ["test", "./..."]);
+run("Go static analysis", "go", ["vet", "./..."]);
 
 const outputDirectory = mkdtempSync(join(tmpdir(), "determinant-migration-build-"));
 try {
   for (const [name, goos, goarch, suffix] of [
     ["macOS arm64", "darwin", "arm64", ""],
+    ["macOS amd64", "darwin", "amd64", ""],
     ["Linux amd64", "linux", "amd64", ""],
     ["Windows amd64", "windows", "amd64", ".exe"],
   ]) {
