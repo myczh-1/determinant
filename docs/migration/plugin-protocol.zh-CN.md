@@ -2,6 +2,12 @@
 
 插件使用独立进程，通过 stdin/stdout 交换 JSON Lines。协议版本为 `aal-plugin/v1`，插件不能直接依赖内部 AST。
 
+## 边界
+
+Observer Protocol ≠ Plugin Host。
+
+Observer Protocol 只定义独立进程之间如何交换请求、ProgramModel、诊断和 Artifact。本分支不负责插件发现、注册、启动、监督、超时、沙箱或生命周期管理。
+
 Observer 请求示例：
 
 ```json

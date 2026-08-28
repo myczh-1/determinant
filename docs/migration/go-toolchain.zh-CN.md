@@ -1,5 +1,15 @@
 # Go 工具链迁移状态
 
+## 状态：PASS
+
+`refactor/go-toolchain` 已通过当前阶段统一验收：
+
+```bash
+npm run test:migration
+```
+
+该验收包含旧行为基线、确定性构建、CLI 合同、Go/TypeScript 生成代码、ProgramModel、最小 Observer Protocol、Go 静态分析和 macOS/Linux/Windows 交叉构建。
+
 ## 目标
 
 `refactor/go-toolchain` 的目标是建立一条完整、可重复的编译器闭环：
@@ -41,6 +51,8 @@ npm run test:migration
 ```
 
 ## 当前边界
+
+Observer Protocol 只定义独立进程之间的数据交换，不等于 Plugin Host。本分支不提供插件发现、注册、启动、监督、超时、沙箱或生命周期管理。
 
 本分支不包含错误文案逐字兼容、TypeScript 目标运行器管理、`dev/watch`、
 Mermaid/ER/流程图产品体验、VS Code 插件和完整第三方语义插件。

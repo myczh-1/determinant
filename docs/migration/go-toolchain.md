@@ -1,5 +1,15 @@
 # Go Toolchain Migration Status
 
+## Status: PASS
+
+`refactor/go-toolchain` passes the acceptance command for this phase:
+
+```bash
+npm run test:migration
+```
+
+The gate covers the legacy behavior baseline, deterministic builds, CLI contracts, generated Go/TypeScript validity, ProgramModel, the minimal Observer Protocol, Go static analysis, and macOS/Linux/Windows cross-builds.
+
 ## Goal
 
 The `refactor/go-toolchain` branch establishes a complete, reproducible compiler loop:
@@ -43,6 +53,8 @@ npm run test:migration
 ```
 
 ## Current boundary
+
+The Observer Protocol defines data exchange between independent processes; it is not a Plugin Host. This branch does not provide plugin discovery, registration, launching, supervision, timeouts, sandboxing, or lifecycle management.
 
 Exact legacy diagnostic wording, TypeScript target runner management,
 `dev/watch`, Mermaid/ER/flow product UX, a VS Code extension, and full

@@ -2,6 +2,12 @@
 
 Plugins run as independent processes and exchange JSON Lines over stdin/stdout. The protocol version is `aal-plugin/v1`; plugins must not depend on the internal AST.
 
+## Boundary
+
+Observer Protocol ≠ Plugin Host.
+
+The Observer Protocol only defines how independent processes exchange requests, ProgramModel data, diagnostics, and artifacts. This branch does not provide plugin discovery, registration, launching, supervision, timeouts, sandboxing, or lifecycle management.
+
 Example Observer request:
 
 ```json
