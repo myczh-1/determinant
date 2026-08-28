@@ -36,6 +36,18 @@ AI 可以负责生成和修改 AAL。
 
 > **审计之前，AI 可以是概率性的；审计之后，软件不应该继续是概率性的。**
 
+## Go 工具链迁移
+
+当前 `refactor/go-toolchain` 分支正在把工具链收敛为：
+
+```text
+AAL → Go Core → Canonical ProgramModel → Backend → 目标代码
+```
+
+该分支已经提供 Go 版本的 `check`、Go/TypeScript 代码生成、系统 Go 工具链运行，以及独立进程 Observer Plugin 协议。旧 TypeScript/Node 实现在迁移门全部通过前继续作为行为参考；Go、Node、Bun 等目标运行时不由 Determinant 内置。
+
+这次迁移仍然聚焦编译器闭环，不把 `dev/watch`、Mermaid/ER/流程图产品体验、VS Code 插件或完整第三方语义插件提前并入核心。
+
 ## 这个仓库是一个参考实验，而不是一门要求所有项目采用的语言
 
 Determinant 的核心并不是这个仓库当前实现的 AAL 语法。

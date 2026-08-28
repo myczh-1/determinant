@@ -3,6 +3,7 @@ package semantic
 import (
 	"fmt"
 	"regexp"
+	"sort"
 
 	"github.com/myczh-1/determinant/internal/ast"
 	"github.com/myczh-1/determinant/internal/diagnostics"
@@ -494,7 +495,7 @@ func (c *checker) checkHTTPEntries() {
 				c.error("AAL2093", "HTTP maps a failure the flow cannot produce: "+mapping.Failure, mapping.Location)
 			}
 		}
-		for failure := range possibleFailures {
+		for _, failure := range sortedKeys(possibleFailures) {
 			if !mappedFailures[failure] {
 				c.error("AAL2094", "HTTP entry is missing a failure mapping: "+failure, entry.Location)
 			}
@@ -696,11 +697,11 @@ func describe(typeRef Type) string {
 }
 
 func typeFromAST(typeRef ast.TypeRef) Type {
-	return Type{Kind: typeRef.Kind, Name: typeRef.Name, Currency: typeRef.Currency, Unit: typeRef.Unit, Scale: typeRef.Scale, Values: append([]string(nil), typeRef.Values...)}
+	return Type{Kind: typeRef.Kind, Name: typeRef.Name, Currency: typeRef.Currency, Unit: typeRef.Unit, Scale: typeRef.Scale, Values: append([]string(nil), typeRef.Values...), Fields: append([]ast.Field(nil), typeRef.Fields...)}
 }
 
 func toASTTypeRef(typeRef Type) ast.TypeRef {
-	return ast.TypeRef{Kind: typeRef.Kind, Name: typeRef.Name, Currency: typeRef.Currency, Unit: typeRef.Unit, Scale: typeRef.Scale, Values: append([]string(nil), typeRef.Values...)}
+	return ast.TypeRef{Kind: typeRef.Kind, Name: typeRef.Name, Currency: typeRef.Currency, Unit: typeRef.Unit, Scale: typeRef.Scale, Values: append([]string(nil), typeRef.Values...), Fields: append([]ast.Field(nil), typeRef.Fields...)}
 }
 
 func resolveTypeWithoutDiagnostics(typeRef ast.TypeRef, info *TypeInfo) Type {
@@ -718,7 +719,8 @@ func resolveTypeWithoutDiagnostics(typeRef ast.TypeRef, info *TypeInfo) Type {
 
 func valueEnvironment(valueTypes map[string]Type) map[string]Type {
 	environment := map[string]Type{}
-	for _, valueType := range valueTypes {
+	for _, name := range sortedTypeNames(valueTypes) {
+		valueType := valueTypes[name]
 		for _, value := range valueType.Values {
 			if _, exists := environment[value]; !exists {
 				environment[value] = valueType
@@ -726,6 +728,24 @@ func valueEnvironment(valueTypes map[string]Type) map[string]Type {
 		}
 	}
 	return environment
+}
+
+func sortedTypeNames(values map[string]Type) []string {
+	names := make([]string, 0, len(values))
+	for name := range values {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func sortedKeys(values map[string]bool) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func rootExpression(expression *ast.Expr) *ast.Expr {

@@ -13,6 +13,7 @@ type TypeRef struct {
 	Unit     string   `json:"unit,omitempty"`
 	Scale    int      `json:"scale,omitempty"`
 	Values   []string `json:"values,omitempty"`
+	Fields   []Field  `json:"fields,omitempty"`
 }
 
 type Field struct {

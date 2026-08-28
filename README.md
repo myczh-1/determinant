@@ -36,6 +36,18 @@ Once the AAL is confirmed, subsequent program generation no longer depends on an
 
 > **Before review, AI may be probabilistic. After review, the software should not remain probabilistic.**
 
+## Go toolchain migration
+
+The current `refactor/go-toolchain` branch is converging the toolchain on:
+
+```text
+AAL → Go Core → Canonical ProgramModel → Backend → target source
+```
+
+The branch provides a Go `check` command, Go and TypeScript source generation, execution through the system Go toolchain, and an out-of-process Observer Plugin protocol. The existing TypeScript/Node implementation remains the behavioral reference until the migration gates pass; Determinant does not bundle Go, Node, Bun, or other target runtimes.
+
+This migration stays focused on the compiler loop. `dev/watch`, Mermaid/ER/flow product UX, a VS Code extension, and full third-party semantic plugins remain follow-up work rather than core compiler features.
+
 ## This repository is a reference experiment, not a universal language
 
 The central idea of Determinant is **not the particular AAL syntax implemented in this repository**.
