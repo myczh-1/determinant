@@ -61,11 +61,15 @@ Go 版本逐步满足：
 5. TypeScript Backend 保持既有行为；
 6. HTTP 外部行为一致；
 7. 同一输入重复构建得到相同结果；
-8. `determinant run --target go` 可调用系统 Go 工具链；
+8. `determinant run` 可将 AAL 生成临时 Go 源码并调用系统 Go 工具链；
 9. Windows、macOS、Linux CLI 可以构建；
 10. Observer Plugin 协议可以读取 ProgramModel 且不改变程序行为。
 
 在全部 Gate 通过前，不删除旧 Node 实现。
+
+本阶段的 Gate 不包含 Mermaid、完整 Semantic Plugin、内置 Go/Node/Bun
+运行时或 CLI 改名。它们分别属于后续 `feature/workbench`、
+`feature/semantic-plugins` 或发布阶段的独立决策。
 
 ## 当前分支进度
 
@@ -75,8 +79,13 @@ Go 版本逐步满足：
 - G3：ProgramModel 稳定序列化；
 - G4/G7：Go 和 TypeScript 生成可重复，Go 示例可构建；
 - G5/G6：当前 Todo/订单退款样例的生成与 HTTP 运行路径；
-- G8：系统 Go 工具链启动、Fixture 加载和冻结时钟；
+- G8：`determinant run` 通过系统 Go 工具链启动、加载 Fixture 和使用冻结时钟；
 - G9：Go CLI 的 macOS、Linux、Windows 交叉构建；
 - G10：Observer JSON Lines 协议往返测试。
 
-仍需独立完成旧 Node 全量 Oracle 与新后端逐项对照、TypeScript 目标运行器适配和旧 Binding 诊断逐字兼容，完成后才能把这些 Gate 标记为最终通过。
+参考实现文件、冻结输入、Fixture、生成物和参考测试的摘要由
+`npm run verify:baseline` 复核；Go 迁移阶段的统一验收入口是
+`npm run test:migration`。
+
+诊断 Gate 对齐接受/拒绝结果、诊断类别和源位置，不要求旧实现的错误文案逐字一致。
+TypeScript 目标在本阶段通过 `build` 生成并验证行为；`run` 的迁移目标是 Go。

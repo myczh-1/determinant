@@ -26,11 +26,27 @@ AAL 源文件
 - Semantic Plugin 参数占位和 Backend 接口边界；
 - Go CLI 的 macOS、Linux、Windows 交叉构建验证。
 
+## 当前阶段冻结范围
+
+本分支只负责 Go 编译器迁移：旧 Node/TypeScript 实现保留为行为参考，
+CLI 名称继续使用 `determinant`，AAL 只是语言名称。
+
+`run` 的定义是：AAL → 临时目标源码 → 调用用户已有的目标运行器。
+当前迁移目标是系统 Go 工具链；Determinant 不携带 Go、Node 或 Bun。
+
+当前阶段的统一验收命令是：
+
+```bash
+npm run test:migration
+```
+
 ## 当前边界
 
-本分支暂不包含旧 Node 实现的全部 Binding 诊断逐字兼容、TypeScript 目标的运行器管理、`dev/watch`、Mermaid/ER/流程图产品体验、VS Code 插件和完整第三方语义插件。这些能力必须在对应迁移门补齐或明确拆到后续分支后，才能删除旧 Node 实现。
-
-目标运行时由用户提供。Determinant 只生成目标源代码，`run --target go` 调用系统 Go 工具链，不内置 Go、Node 或 Bun。
+本分支不包含错误文案逐字兼容、TypeScript 目标运行器管理、`dev/watch`、
+Mermaid/ER/流程图产品体验、VS Code 插件和完整第三方语义插件。
+完整 Mermaid 与工作台能力进入 `feature/workbench`；第三方类型、资源、
+操作、validator、lowering 和 runtime integration 进入
+`feature/semantic-plugins`。旧 Node 实现必须在本阶段 Gate 全绿前保留。
 
 ## 验证入口
 

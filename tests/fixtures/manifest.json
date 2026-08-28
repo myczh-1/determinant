@@ -44,5 +44,26 @@
     "test/semantic-values-money.test.mjs",
     "benchmark/test/scorer.test.mjs",
     "benchmark/test/workspace.test.mjs"
-  ]
+  ],
+  "referenceFileHashes": {
+    "src/ast.ts": "467ddf0ddf914b4c64e3c204232773db5e3237e9974cb46c5196f9ecd7034487",
+    "src/binding.ts": "2b1f3e0ba443f2ee2f719eff1aaaa471e19309de6d0d99962ebafb3c803b6af3",
+    "src/checker.ts": "531d567bf28e733d23ddb46a4841af3dcc0d3828a972ce234c83901769ae8959",
+    "src/codegen.ts": "b7c46403e5d374ad68883f6e53b7c55a2b5c16928e80aa0a968036e259050a05",
+    "src/compiler.ts": "089a11d947c3869f6c4f5e14e9592ed3c8ed04480b849d96fa8c32e7eb7a1d81",
+    "src/diagnostics.ts": "31239ee05af9867b2fc68f3c2e88dc41602a055c25cd92e047ec86fe201cca48",
+    "src/index.ts": "31cb4cc07b562b1a62cdea4954f2d5cbcb141a171313a0be107e282a3cfa1985",
+    "src/language.ts": "e4be8ce2694d511ce3c50c70f59e3eed17ce38159a7efb5d90dec238f22219db",
+    "src/parser.ts": "adfc607c1b7ae9ea3af0969a64268b0f402eb7a8b7f46c1c917be9b1e11c86af",
+    "bin/determinant.mjs": "d78a3694ba9821f59daab3073eaa4b4705d8b6691dec4301676327889686f14f",
+    "test/compiler.test.mjs": "17c20849493a7b7a08bc49094a75888e93c0756c51d2bc437a21f76c2f4f9509",
+    "test/compiler.zh-CN.test.mjs": "b74e9441a53450a2b6577a46cad3ea480fa83ab5801da01166f735888acacfa9",
+    "test/http.test.mjs": "4bf494f3b9452ca1adad23d65d2725b96a6158b0b0fd6553d6c7273acb61fc52",
+    "test/order-refund.oracle.test.mjs": "d2ea32c7a8de2eefd42a3a7320b76a717f47fe8e74b213084e72bda481f210bf",
+    "test/semantic-atomic-fixture.test.mjs": "1b9045b0ff34c002f8041e9680b4dc89a0965f9ba010fc902e25c31b1190b1a6",
+    "test/semantic-time-logic.test.mjs": "0a039655bc16e084daec2447c091be979de8e19d5d05f3c9a5085fcd0ec3d8b1",
+    "test/semantic-values-money.test.mjs": "51ca69032292d5248a90edab5526f4ce83d231f0fef6b02a0346ec886881855b",
+    "benchmark/test/scorer.test.mjs": "af8df8a67481cb2d6740795095ff87bd985fd0151079b53648ed4b73adea79b9",
+    "benchmark/test/workspace.test.mjs": "75da92f0abb12a7de4c241aae4d0f4c71643cd6a73d618c0c95c5227bd161df2"
+  }
 }

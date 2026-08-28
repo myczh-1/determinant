@@ -8,10 +8,14 @@ import (
 
 	"github.com/myczh-1/determinant/internal/ast"
 	"github.com/myczh-1/determinant/internal/binding"
+	"github.com/myczh-1/determinant/internal/language"
 	"github.com/myczh-1/determinant/internal/semantic"
 )
 
-type GoBackend struct{ Binding *binding.Resolved }
+type GoBackend struct {
+	Binding  *binding.Resolved
+	Language language.Language
+}
 
 func (GoBackend) Target() string { return "go" }
 
@@ -27,6 +31,7 @@ type goGenerator struct {
 	usedNames    map[string]bool
 	flowCounters map[string]int
 	binding      *binding.Resolved
+	language     language.Language
 }
 
 func (backend GoBackend) Generate(program *ast.Program, typeInfo *semantic.TypeInfo) (string, error) {
@@ -45,6 +50,7 @@ func (backend GoBackend) Generate(program *ast.Program, typeInfo *semantic.TypeI
 		usedNames:    map[string]bool{},
 		flowCounters: map[string]int{},
 		binding:      backend.Binding,
+		language:     backend.Language,
 	}
 	g.prepareNames()
 	var b strings.Builder
@@ -147,6 +153,11 @@ func (g *goGenerator) writeHeader(b *strings.Builder) {
 	}
 	b.WriteString(")\n\n")
 	b.WriteString("const applicationName = " + strconv.Quote(g.program.Name) + "\n\n")
+	languageName := "en"
+	if g.language == language.Chinese {
+		languageName = "zh-CN"
+	}
+	b.WriteString("const determinantLanguage = " + strconv.Quote(languageName) + "\n\n")
 	b.WriteString("var _ = time.Now\nvar _ = log.Fatal\nvar _ = math.Trunc\nvar _ = os.Getenv\n\n")
 }
 
@@ -266,6 +277,12 @@ func readFixtureValue(raw json.RawMessage, allowed ...string) (string, error) {
 	if err != nil { return "", err }
 	for _, candidate := range allowed { if candidate == value { return value, nil } }
 	return "", fmt.Errorf("invalid value")
+}
+func formatHTTPInputError(err error, kind, field string) string {
+	if determinantLanguage != "zh-CN" { return "Invalid request input" }
+	if err != nil && strings.Contains(err.Error(), "missing required field") { return "缺少字段：" + field }
+	if kind == "money" { return "金额格式错误：" + field }
+	return "字段类型错误：" + field
 }
 func mustFixtureText(raw json.RawMessage) string { value, err := readFixtureText(raw); if err != nil { panic(err) }; return value }
 func mustFixtureInteger(raw json.RawMessage) int64 { value, err := readFixtureInteger(raw); if err != nil { panic(err) }; return value }
@@ -621,7 +638,7 @@ func (g *goGenerator) writeHTTP(b *strings.Builder) {
 		b.WriteString("\t\tif parameters, matched := matchRoute(" + strconv.Quote(entry.Path) + ", request.URL.Path); matched {\n")
 		needsBody := len(entry.BodyMappings) > 0
 		if needsBody {
-			b.WriteString("\t\t\tbody, err := readBody(request)\n\t\t\tif err != nil { writeJSON(response, http.StatusBadRequest, map[string]string{\"error\": \"invalid request body\"}); return }\n")
+			b.WriteString("\t\t\tbody, err := readBody(request)\n\t\t\tif err != nil { writeJSON(response, http.StatusBadRequest, map[string]string{\"error\": " + strconv.Quote(g.invalidJSONMessage()) + "}); return }\n")
 		} else {
 			b.WriteString("\t\t\tbody := map[string]json.RawMessage{}\n")
 			b.WriteString("\t\t\t_ = body\n")
@@ -642,7 +659,8 @@ func (g *goGenerator) writeHTTP(b *strings.Builder) {
 			}
 			read := g.httpReader(input.Type, mapping.SourceName, fromPath)
 			b.WriteString("\t\t\t" + variable + ", err := " + read + "\n")
-			b.WriteString("\t\t\tif err != nil { writeJSON(response, http.StatusBadRequest, map[string]string{\"error\": err.Error()}); return }\n")
+			kind := g.resolveType(input.Type).Kind
+			b.WriteString("\t\t\tif err != nil { writeJSON(response, http.StatusBadRequest, map[string]string{\"error\": formatHTTPInputError(err, " + strconv.Quote(kind) + ", " + strconv.Quote(mapping.SourceName) + ")}); return }\n")
 		}
 		args := make([]string, 0, len(flow.Inputs))
 		for index := range flow.Inputs {
@@ -668,7 +686,14 @@ func (g *goGenerator) writeHTTP(b *strings.Builder) {
 		}
 		b.WriteString("\t\t}\n\t}\n")
 	}
-	b.WriteString("\twriteJSON(response, http.StatusNotFound, map[string]string{\"error\": \"route not found\"})\n}\n")
+	b.WriteString("\twriteJSON(response, http.StatusNotFound, map[string]string{\"error\": \"Not found\"})\n}\n")
+}
+
+func (g *goGenerator) invalidJSONMessage() string {
+	if g.language == language.Chinese {
+		return "请求 JSON 无效"
+	}
+	return "Invalid JSON"
 }
 
 func (g *goGenerator) httpMapping(entry ast.HTTPEntry, target string) (ast.HTTPFieldMapping, string, bool) {
@@ -721,7 +746,7 @@ func (g *goGenerator) serializeValue(expression string, typeRef semantic.Type) s
 	case "money":
 		return "moneyValue(" + expression + ")"
 	case "time":
-		return expression + ".UTC().Format(time.RFC3339Nano)"
+		return expression + ".UTC().Format(\"2006-01-02T15:04:05.000Z\")"
 	case "object":
 		parts := []string{}
 		for _, field := range typeRef.Fields {

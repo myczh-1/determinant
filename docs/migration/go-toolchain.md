@@ -26,11 +26,35 @@ The existing TypeScript/Node implementation remains available as the behavioral 
 - Semantic Plugin parameter placeholder and Backend interface boundary;
 - macOS, Linux, and Windows cross-build verification for the Go CLI.
 
+## Frozen scope for this phase
+
+This branch is only the Go compiler migration. The existing Node/TypeScript
+implementation remains the behavioral reference, and the repository and CLI
+continue to use `determinant`; AAL is the language name.
+
+`run` means AAL → temporary target source → the target runner already
+available on the user's machine. The migration target is the system Go
+toolchain; Determinant does not ship Go, Node, or Bun.
+
+The single migration acceptance command is:
+
+```bash
+npm run test:migration
+```
+
 ## Current boundary
 
-Exact legacy Binding diagnostic compatibility, TypeScript target runner management, `dev/watch`, Mermaid/ER/flow product UX, a VS Code extension, and full third-party semantic plugins are not part of the completed slice yet. The old Node implementation must remain until the corresponding migration gates are completed or those items are explicitly moved to follow-up branches.
+Exact legacy diagnostic wording, TypeScript target runner management,
+`dev/watch`, Mermaid/ER/flow product UX, a VS Code extension, and full
+third-party semantic plugins are not part of this phase. Mermaid and workbench
+features belong to `feature/workbench`; third-party types, resources,
+operations, validators, lowering, and runtime integration belong to
+`feature/semantic-plugins`. The old Node implementation remains until the
+current migration gates are green.
 
-Target runtimes are user-provided. Determinant generates target source; `run --target go` invokes the system Go toolchain and does not bundle Go, Node, or Bun.
+Target runtimes are user-provided. Determinant generates target source;
+`run` invokes the system Go toolchain for this phase and does not bundle Go,
+Node, or Bun.
 
 ## Verification entry points
 

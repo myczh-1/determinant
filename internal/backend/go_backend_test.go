@@ -58,7 +58,9 @@ func TestGoBackendGeneratesAllMigrationExamples(t *testing.T) {
 		path string
 		lang language.Language
 	}{
+		{name: "items english", path: "examples/items/app.aal", lang: language.English},
 		{name: "items chinese", path: "examples/items/app.zh-CN.aal", lang: language.Chinese},
+		{name: "order english", path: "examples/order/app.aal", lang: language.English},
 		{name: "order chinese", path: "examples/order/app.zh-CN.aal", lang: language.Chinese},
 		{name: "refund stable", path: "examples/order-refund/app.zh-CN.aal", lang: language.Chinese},
 		{name: "refund composed", path: "examples/order-refund/app.composed-flow.zh-CN.aal", lang: language.Chinese},
@@ -320,6 +322,8 @@ func TestTypeScriptBackendGeneratesAllMigrationExamples(t *testing.T) {
 		{name: "items english", path: "examples/items/app.aal", lang: language.English},
 		{name: "items chinese", path: "examples/items/app.zh-CN.aal", lang: language.Chinese},
 		{name: "order english", path: "examples/order/app.aal", lang: language.English},
+		{name: "order chinese", path: "examples/order/app.zh-CN.aal", lang: language.Chinese},
+		{name: "refund stable", path: "examples/order-refund/app.zh-CN.aal", lang: language.Chinese},
 		{name: "refund composed", path: "examples/order-refund/app.composed-flow.zh-CN.aal", lang: language.Chinese},
 	}
 	for _, tc := range cases {

@@ -158,7 +158,7 @@ func executeBuild(args []string, output, errors io.Writer) int {
 	if !ok {
 		return writeDiagnostics(output, errors, options.json, result.Diagnostics, 1)
 	}
-	selected, err := selectBackend(options.target, result.Binding)
+	selected, err := selectBackend(options.target, result.Binding, options.language)
 	if err != nil {
 		return writeFailure(output, errors, args, diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "AAL3001", Message: err.Error()})
 	}
@@ -198,7 +198,7 @@ func executeRun(args []string, output, errors io.Writer) int {
 	if !ok {
 		return writeDiagnostics(output, errors, options.json, result.Diagnostics, 1)
 	}
-	selected, err := selectBackend(options.target, result.Binding)
+	selected, err := selectBackend(options.target, result.Binding, options.language)
 	if err != nil {
 		return writeFailure(output, errors, args, diagnostics.Diagnostic{Severity: diagnostics.Error, Code: "AAL3001", Message: err.Error()})
 	}
@@ -262,10 +262,10 @@ func compileFile(options commandOptions) (compiler.Result, bool) {
 	return result, len(result.Diagnostics) == 0
 }
 
-func selectBackend(target string, resolved *binding.Resolved) (backend.Backend, error) {
+func selectBackend(target string, resolved *binding.Resolved, lang language.Language) (backend.Backend, error) {
 	switch target {
 	case "go":
-		return backend.GoBackend{Binding: resolved}, nil
+		return backend.GoBackend{Binding: resolved, Language: lang}, nil
 	case "typescript":
 		return backend.TypeScriptBackend{Binding: resolved}, nil
 	default:
