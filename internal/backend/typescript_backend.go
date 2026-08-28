@@ -7,10 +7,14 @@ import (
 
 	"github.com/myczh-1/determinant/internal/ast"
 	"github.com/myczh-1/determinant/internal/binding"
+	"github.com/myczh-1/determinant/internal/language"
 	"github.com/myczh-1/determinant/internal/semantic"
 )
 
-type TypeScriptBackend struct{ Binding *binding.Resolved }
+type TypeScriptBackend struct {
+	Binding  *binding.Resolved
+	Language language.Language
+}
 
 func (TypeScriptBackend) Target() string { return "typescript" }
 
@@ -34,6 +38,7 @@ func (backend TypeScriptBackend) Generate(program *ast.Program, typeInfo *semant
 		usedNames:    map[string]bool{},
 		flowCounters: map[string]int{},
 		binding:      backend.Binding,
+		language:     backend.Language,
 	}
 	base.prepareNames()
 	g := &tsGenerator{base: base}
@@ -102,10 +107,10 @@ function matchRoute(template: string, actual: string): { readonly [key: string]:
   return parameters;
 }
 function readBody(value: unknown): Record<string, unknown> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
-function readInteger(value: unknown): number { if (typeof value === "number" && Number.isSafeInteger(value)) return value; if (typeof value === "string" && /^-?(?:0|[1-9]\d*)$/.test(value)) return Number(value); throw new Error("invalid integer"); }
+function readInteger(value: unknown, fromPath: boolean): number { if (fromPath && typeof value === "string" && /^-?(?:0|[1-9]\d*)$/.test(value)) return Number(value); if (typeof value === "number" && Number.isSafeInteger(value)) return value; throw new Error("invalid integer"); }
 function readText(value: unknown): string { if (typeof value === "string") return value; throw new Error("invalid text"); }
-function readBoolean(value: unknown): boolean { if (typeof value === "boolean") return value; if (value === "true" || value === "false") return value === "true"; throw new Error("invalid boolean"); }
-function readMoney(value: unknown, currency: string, unit: string, scale: number): Money { if (typeof value !== "string") throw new Error("invalid money"); const unsigned = value.startsWith("-") ? value.slice(1) : value; const parts = unsigned.split("."); if (parts.length !== 2 || parts[1].length !== scale || !/^\d+$/.test(parts[0]) || !/^\d+$/.test(parts[1]) || (parts[0].length > 1 && parts[0].startsWith("0"))) throw new Error("invalid money"); return money(currency, unit, scale, value); }
+function readBoolean(value: unknown, fromPath: boolean): boolean { if (typeof value === "boolean") return value; if (fromPath && (value === "true" || value === "false")) return value === "true"; throw new Error("invalid boolean"); }
+function readMoney(value: unknown, fromPath: boolean, currency: string, unit: string, scale: number): Money { if (fromPath || typeof value !== "string") throw new Error("invalid money"); const unsigned = value.startsWith("-") ? value.slice(1) : value; const parts = unsigned.split("."); if (parts.length !== 2 || parts[1].length !== scale || !/^\d+$/.test(parts[0]) || !/^\d+$/.test(parts[1]) || (parts[0].length > 1 && parts[0].startsWith("0"))) throw new Error("invalid money"); return money(currency, unit, scale, value); }
 function readFixtureTime(value: unknown): Date { const parsed = new Date(readText(value)); if (!Number.isFinite(parsed.getTime()) || parsed.toISOString() !== value) throw new Error("invalid time"); return parsed; }
 function readFixtureValue(value: unknown, allowed: readonly string[]): string { const text = readText(value); if (!allowed.includes(text)) throw new Error("invalid value"); return text; }
 
@@ -184,13 +189,13 @@ func (g *tsGenerator) fixtureValueExpression(typeRef ast.TypeRef, value string) 
 	resolved := g.base.resolveType(typeRef)
 	switch resolved.Kind {
 	case "integer":
-		return "readInteger(" + value + ")"
+		return "readInteger(" + value + ", false)"
 	case "text":
 		return "readText(" + value + ")"
 	case "boolean":
-		return "readBoolean(" + value + ")"
+		return "readBoolean(" + value + ", false)"
 	case "money":
-		return "readMoney(" + value + ", " + strconv.Quote(resolved.Currency) + ", " + strconv.Quote(resolved.Unit) + ", " + strconv.Itoa(resolved.Scale) + ")"
+		return "readMoney(" + value + ", false, " + strconv.Quote(resolved.Currency) + ", " + strconv.Quote(resolved.Unit) + ", " + strconv.Itoa(resolved.Scale) + ")"
 	case "time":
 		return "readFixtureTime(" + value + ")"
 	case "value":
@@ -459,7 +464,13 @@ export function handleHttpRequest(request: HttpRequest, context: HttpRuntimeCont
 				value = "body[" + strconv.Quote(mapping.SourceName) + "]"
 			}
 			b.WriteString("      let " + variable + ": " + g.tsType(g.base.resolveType(input.Type)) + ";\n")
-			b.WriteString("      try { " + variable + " = " + g.httpReader(input.Type, value, fromPath) + "; } catch { return { status: 400, body: { error: \"invalid request field\" } }; }\n")
+			kind := g.base.resolveType(input.Type).Kind
+			missingMessage, moneyMessage, fieldMessage := g.httpInputMessages(kind, mapping.SourceName)
+			errorMessage := value + " === undefined ? " + strconv.Quote(missingMessage) + " : " + strconv.Quote(fieldMessage)
+			if kind == "money" {
+				errorMessage = value + " === undefined ? " + strconv.Quote(missingMessage) + " : " + strconv.Quote(moneyMessage)
+			}
+			b.WriteString("      try { " + variable + " = " + g.httpReader(input.Type, value, fromPath) + "; } catch { return { status: 400, body: { error: " + errorMessage + " } }; }\n")
 		}
 		args := make([]string, 0, len(flow.Inputs))
 		for index := range flow.Inputs {
@@ -485,18 +496,25 @@ export function handleHttpRequest(request: HttpRequest, context: HttpRuntimeCont
 		}
 		b.WriteString("    }\n  }\n")
 	}
-	b.WriteString("  return { status: 404, body: { error: \"route not found\" } };\n}\n")
+	b.WriteString("  return { status: 404, body: { error: \"Not found\" } };\n}\n")
+}
+
+func (g *tsGenerator) httpInputMessages(kind, field string) (string, string, string) {
+	if g.base.language != language.Chinese {
+		return "Invalid request input", "Invalid request input", "Invalid request input"
+	}
+	return "缺少字段：" + field, "金额格式错误：" + field, "字段类型错误：" + field
 }
 
 func (g *tsGenerator) httpReader(typeRef ast.TypeRef, value string, fromPath bool) string {
 	typeInfo := g.base.resolveType(typeRef)
 	switch typeInfo.Kind {
 	case "integer":
-		return "readInteger(" + value + ")"
+		return "readInteger(" + value + ", " + strconv.FormatBool(fromPath) + ")"
 	case "boolean":
-		return "readBoolean(" + value + ")"
+		return "readBoolean(" + value + ", " + strconv.FormatBool(fromPath) + ")"
 	case "money":
-		return "readMoney(" + value + ", " + strconv.Quote(typeInfo.Currency) + ", " + strconv.Quote(typeInfo.Unit) + ", " + strconv.Itoa(typeInfo.Scale) + ")"
+		return "readMoney(" + value + ", " + strconv.FormatBool(fromPath) + ", " + strconv.Quote(typeInfo.Currency) + ", " + strconv.Quote(typeInfo.Unit) + ", " + strconv.Itoa(typeInfo.Scale) + ")"
 	default:
 		return "readText(" + value + ")"
 	}

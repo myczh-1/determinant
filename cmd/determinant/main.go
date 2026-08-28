@@ -267,7 +267,7 @@ func selectBackend(target string, resolved *binding.Resolved, lang language.Lang
 	case "go":
 		return backend.GoBackend{Binding: resolved, Language: lang}, nil
 	case "typescript":
-		return backend.TypeScriptBackend{Binding: resolved}, nil
+		return backend.TypeScriptBackend{Binding: resolved, Language: lang}, nil
 	default:
 		return nil, fmt.Errorf("unsupported target: %s", target)
 	}

@@ -21,6 +21,7 @@ function run(name, command, args, environment = process.env) {
 run("frozen reference baseline", npm, ["run", "verify:baseline"]);
 run("legacy Node/TypeScript suite", npm, ["test"]);
 run("composed-flow reference oracle", npm, ["run", "test:order-refund:composed-flow"]);
+run("Go Core generated TypeScript differential oracle", process.execPath, ["scripts/verify-typescript-backend.mjs"]);
 run("Go compiler and backend tests", "go", ["test", "./..."]);
 
 const outputDirectory = mkdtempSync(join(tmpdir(), "determinant-migration-build-"));
