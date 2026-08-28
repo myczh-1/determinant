@@ -105,7 +105,7 @@ function readBody(value: unknown): Record<string, unknown> { return value && typ
 function readInteger(value: unknown): number { if (typeof value === "number" && Number.isSafeInteger(value)) return value; if (typeof value === "string" && /^-?(?:0|[1-9]\d*)$/.test(value)) return Number(value); throw new Error("invalid integer"); }
 function readText(value: unknown): string { if (typeof value === "string") return value; throw new Error("invalid text"); }
 function readBoolean(value: unknown): boolean { if (typeof value === "boolean") return value; if (value === "true" || value === "false") return value === "true"; throw new Error("invalid boolean"); }
-function readMoney(value: unknown, currency: string, unit: string, scale: number): Money { if (typeof value !== "string") throw new Error("invalid money"); return money(currency, unit, scale, value); }
+function readMoney(value: unknown, currency: string, unit: string, scale: number): Money { if (typeof value !== "string") throw new Error("invalid money"); const unsigned = value.startsWith("-") ? value.slice(1) : value; const parts = unsigned.split("."); if (parts.length !== 2 || parts[1].length !== scale || !/^\d+$/.test(parts[0]) || !/^\d+$/.test(parts[1]) || (parts[0].length > 1 && parts[0].startsWith("0"))) throw new Error("invalid money"); return money(currency, unit, scale, value); }
 function readFixtureTime(value: unknown): Date { const parsed = new Date(readText(value)); if (!Number.isFinite(parsed.getTime()) || parsed.toISOString() !== value) throw new Error("invalid time"); return parsed; }
 function readFixtureValue(value: unknown, allowed: readonly string[]): string { const text = readText(value); if (!allowed.includes(text)) throw new Error("invalid value"); return text; }
 

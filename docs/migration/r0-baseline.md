@@ -66,3 +66,17 @@ Go 版本逐步满足：
 10. Observer Plugin 协议可以读取 ProgramModel 且不改变程序行为。
 
 在全部 Gate 通过前，不删除旧 Node 实现。
+
+## 当前分支进度
+
+截至 `refactor/go-toolchain` 当前 HEAD，已用现有 English/`zh-CN` 样例覆盖并验证：
+
+- G1/G2：解析接受/拒绝、主要语义错误类别和源位置；
+- G3：ProgramModel 稳定序列化；
+- G4/G7：Go 和 TypeScript 生成可重复，Go 示例可构建；
+- G5/G6：当前 Todo/订单退款样例的生成与 HTTP 运行路径；
+- G8：系统 Go 工具链启动、Fixture 加载和冻结时钟；
+- G9：Go CLI 的 macOS、Linux、Windows 交叉构建；
+- G10：Observer JSON Lines 协议往返测试。
+
+仍需独立完成旧 Node 全量 Oracle 与新后端逐项对照、TypeScript 目标运行器适配和旧 Binding 诊断逐字兼容，完成后才能把这些 Gate 标记为最终通过。
