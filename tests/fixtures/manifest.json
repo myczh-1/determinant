@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "baselineCommit": "c05b6194b89715540666428fb3ded25ae40e5b20",
+  "referenceImplementation": "src/parser.ts + src/checker.ts + src/codegen.ts + bin/determinant.mjs",
+  "commands": {
+    "fullSuite": "npm test",
+    "composedRefundOracle": "npm run test:order-refund:composed-flow",
+    "compileEnglish": "npm run compile:example",
+    "compileChinese": "npm run compile:example:zh"
+  },
+  "observedResults": {
+    "fullSuiteTests": 69,
+    "fullSuitePassed": 69,
+    "composedRefundTests": 24,
+    "composedRefundPassed": 24,
+    "fixtureDigest": "sha256:e0e942f474af7f7f0a5b0df85ae41d3404420e507993eb4f97ab9f280cc092b2",
+    "clock": "2026-01-08T00:00:00.000Z"
+  },
+  "validInputs": [
+    { "path": "examples/items/app.aal", "sha256": "5ce8dc57baef334debb24a83b9d775be79f1359af452f0b8a9deb04c1e734fe9" },
+    { "path": "examples/items/app.zh-CN.aal", "sha256": "34b5c93493773ff60dadce7a5c9234a0c25833cf28fac24f2005987d2b8c7613" },
+    { "path": "examples/order/app.aal", "sha256": "be07c6bebb5de7b2d7d3242418dcb7429219414423b2eb7d88ccea0e96bb142a" },
+    { "path": "examples/order/app.zh-CN.aal", "sha256": "e20339ac38c1c7cd6f496c90f9909151d940e1899b458de234a777493e48f4f4" },
+    { "path": "examples/order-refund/app.zh-CN.aal", "sha256": "8b1704fead0f288777ec188f11b70338a79cf2554de8bf4394cc65b5a511fcfc" },
+    { "path": "examples/order-refund/app.composed-flow.zh-CN.aal", "sha256": "7917c90d627dde4461cd5456132715951115057be64ffa0824225bb2905ced0a" }
+  ],
+  "supportingInputs": [
+    { "path": "examples/items/binding.json", "sha256": "e2a6edc2ae3948a162a0201e653adf3c06dd26c3e214c9b97ac8032393784b51" },
+    { "path": "examples/order/binding.json", "sha256": "6ee8594e509bccb4249b5302f96df0bd05addbe55276fe3b26035569e810a599" },
+    { "path": "examples/order/binding.zh-CN.json", "sha256": "bec1312fd0d55ac1cf7ce985cd2fe0a5855b7ec50bfe1f2fbb3e1b61135fba85" },
+    { "path": "examples/order-refund/fixture.v1.json", "sha256": "e0e942f474af7f7f0a5b0df85ae41d3404420e507993eb4f97ab9f280cc092b2" }
+  ],
+  "generatedOutputs": [
+    { "path": "generated/order.ts", "sha256": "9399d535b63f03a1bbd543433d6c9c2f63dff7a0bdfe5fe354fa7c3ce3d9c81b" },
+    { "path": "generated/order.zh-CN.ts", "sha256": "05881fa4b01cb9773fa557519d60c907ec794e71a98af5bca1c6f2823e4b9efd" }
+  ],
+  "referenceTests": [
+    "test/compiler.test.mjs",
+    "test/compiler.zh-CN.test.mjs",
+    "test/http.test.mjs",
+    "test/order-refund.oracle.test.mjs",
+    "test/semantic-atomic-fixture.test.mjs",
+    "test/semantic-time-logic.test.mjs",
+    "test/semantic-values-money.test.mjs",
+    "benchmark/test/scorer.test.mjs",
+    "benchmark/test/workspace.test.mjs"
+  ]
+}
